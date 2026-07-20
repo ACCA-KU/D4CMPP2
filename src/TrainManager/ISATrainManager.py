@@ -7,6 +7,8 @@ from tqdm import tqdm
 from .TrainManager import Trainer
 
 class ISATrainer(Trainer):
+    """Compatibility extension point referenced by ISA registries and saved configs."""
+
     pass
     # def get_feature(self, network_manager, loader):
     #     "Provide the feature of the model. The model which is used for the training should contains the implementation of 'get_feature'."

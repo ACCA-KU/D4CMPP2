@@ -1,16 +1,54 @@
-import os
-import importlib
+"""Public Analyzer API.
 
-# Allowing to access all modules in the directory
+Exports are explicit so adding an internal helper cannot silently change the public API.
+"""
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+from .ISAAnalyzer import (
+    ISAAnalyzer,
+    ISAAnalyzer_v2,
+    ISAAnalyzer_v1p3,
+    mol_with_atom_index,
+    showAtomHighlight,
+)
+from .ISAPNAnalyzer import (
+    ISAPNAnalyzer,
+    ISAPNAnalyzer_v2,
+    ISAPNAnalyzer_v1p3,
+    ISATPNAnalyzer,
+    ISATPNAnalyzer_v2,
+)
+from .ISAwSAnalyzer import ISAwSAnalyzer
+from .MolAnalyzer import MolAnalyzer, MolAnalyzer_v2, MolAnalyzer_v1p3
+from .core import InferenceCore, ModelArtifacts, predict_ensemble, resolve_model_artifacts
+from .factory import Analyzer, create_analyzer, select_analyzer_class
+from .interpretation import ISAAnalysisResult, ISAAnalysisRow
+from .results import PredictionResult, PredictionRow, UncertaintyResult
 
-module_files = [f for f in os.listdir(current_dir) if f.endswith('.py') and f != '__init__.py']
-
-for module_file in module_files:
-    module_name = module_file[:-3]  
-    module = importlib.import_module(f'.{module_name}', package='src.Analyzer')  
-    
-    for attr in dir(module):
-        if not attr.startswith('_'):  
-            globals()[attr] = getattr(module, attr)
+__all__ = [
+    "Analyzer",
+    "InferenceCore",
+    "ISAAnalyzer",
+    "ISAAnalyzer_v2",
+    "ISAAnalyzer_v1p3",
+    "ISAAnalysisResult",
+    "ISAAnalysisRow",
+    "ISAPNAnalyzer",
+    "ISAPNAnalyzer_v2",
+    "ISAPNAnalyzer_v1p3",
+    "ISATPNAnalyzer",
+    "ISATPNAnalyzer_v2",
+    "ISAwSAnalyzer",
+    "ModelArtifacts",
+    "MolAnalyzer",
+    "MolAnalyzer_v2",
+    "MolAnalyzer_v1p3",
+    "PredictionResult",
+    "PredictionRow",
+    "UncertaintyResult",
+    "create_analyzer",
+    "mol_with_atom_index",
+    "predict_ensemble",
+    "resolve_model_artifacts",
+    "select_analyzer_class",
+    "showAtomHighlight",
+]

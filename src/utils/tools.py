@@ -6,9 +6,17 @@ from rdkit.Chem import Draw
 
 import io
 import PIL
-import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+
+
+def _figure_to_pil(fig):
+    """Render a Matplotlib figure to an RGB Pillow image."""
+
+    fig.canvas.draw()
+    width, height = fig.canvas.get_width_height()
+    rgba = np.asarray(fig.canvas.buffer_rgba())
+    return Image.fromarray(rgba.reshape(height, width, 4), mode="RGBA").convert("RGB")
 
 
 def plot_learning_curve(train_losses,val_losses):
@@ -26,8 +34,7 @@ def plot_learning_curve(train_losses,val_losses):
     plt.title('Learning curve')
 
     fig = plt.gcf()
-    fig.canvas.draw()
-    pil_image = Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+    pil_image = _figure_to_pil(fig)
     plt.close()
     return pil_image
 
@@ -59,8 +66,7 @@ def plot_prediction(targets, prediction_df):
         plt.legend()
 
     fig = plt.gcf()
-    fig.canvas.draw()
-    pil_image = Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
+    pil_image = _figure_to_pil(fig)
     plt.close()
     return pil_image    
     

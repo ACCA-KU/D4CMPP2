@@ -1,38 +1,76 @@
-import torch
 import torch.nn as nn
 
-import dgl
-from dgl.nn import SumPooling
+from D4CMPP2.networks.base import (
+    InputContract,
+    ISA_HYPERPARAMETERS,
+    ISA_OPTIMIZATION_SPACE,
+    MolecularNetwork,
+)
+from D4CMPP2.networks.src.ISAT import ISATconvolution
+from D4CMPP2.networks.src.Linear import Linears
+from D4CMPP2.networks.src.GCN import graph_sum_pool
+from D4CMPP2.networks.src.pyg_hetero import relation_graph
 
-import matplotlib.pyplot as plt
-from D4CMPP.networks.src.ISAT import ISATconvolution
-from D4CMPP.networks.src.Linear import Linears
+class ISAT(MolecularNetwork):
+    """Interpretable structure-attention network."""
 
-class network(nn.Module):
+    model_name = "isat"
+    required_config = ("node_dim", "edge_dim", "target_dim")
+    input_contract = InputContract(
+        required=(
+            "compound_graphs",
+            "compound_r_node",
+            "compound_i_node",
+            "compound_r2r_edge",
+            "compound_d2d_edge",
+        ),
+        optional=("get_score",),
+    )
+    hyperparameters = ISA_HYPERPARAMETERS
+    default_optimization_space = ISA_OPTIMIZATION_SPACE
+
     def __init__(self, config):
-        super(network, self).__init__()
+        super().__init__(config)
 
-        hidden_dim = config.get('hidden_dim', 64)
-        gcn_layers = config.get('conv_layers', 4)
-        dropout = config.get('dropout', 0.1)
-        linear_layers = config.get('linear_layers', 4)
-        target_dim = config['target_dim']
+        hidden_dim = self.config["hidden_dim"]
+        gcn_layers = self.config["conv_layers"]
+        dropout = self.config["dropout"]
+        linear_layers = self.config["linear_layers"]
+        target_dim = self.config["target_dim"]
 
         self.embedding_rnode_lin = nn.Sequential(
-            nn.Linear(config['node_dim'], hidden_dim, bias=False)
+            nn.Linear(self.config["node_dim"], hidden_dim, bias=False)
         )
         self.embedding_inode_lin = nn.Sequential(
             nn.Linear(1, hidden_dim, bias=False)
         )
         self.embedding_edge_lin = nn.Sequential(
-            nn.Linear(config['edge_dim'], hidden_dim, bias=False)
+            nn.Linear(self.config["edge_dim"], hidden_dim, bias=False)
         )
         self.ISATconv = ISATconvolution(hidden_dim, hidden_dim, hidden_dim, nn.LeakyReLU(), gcn_layers,dropout, False, True, 0.1)
         
         self.linears = Linears(hidden_dim, target_dim, nn.ReLU(), linear_layers, dropout, False, False, last=True)
-        self.reduce = SumPooling()
     
-    def forward(self, graph, r_node, i_node, r_edge, d_edge,**kargs):
+    def forward(self, **kargs):
+        graph = kargs.get('compound_graphs', kargs.get('graph'))
+        r_node = kargs.get('compound_r_node', kargs.get('r_node'))
+        i_node = kargs.get('compound_i_node', kargs.get('i_node'))
+        r_edge = kargs.get('compound_r2r_edge', kargs.get('r_edge'))
+        d_edge = kargs.get('compound_d2d_edge', kargs.get('d_edge'))
+        missing = [
+            name
+            for name, value in {
+                "compound_graphs": graph,
+                "compound_r_node": r_node,
+                "compound_i_node": i_node,
+                "compound_r2r_edge": r_edge,
+                "compound_d2d_edge": d_edge,
+            }.items()
+            if value is None
+        ]
+        if missing:
+            raise ValueError(f"ISAT input is missing required fields {missing!r}.")
+
         r_node = r_node.float()
         r_node = self.embedding_rnode_lin(r_node)
         i_node = i_node.float()
@@ -40,18 +78,13 @@ class network(nn.Module):
         r_edge = r_edge.float()
         r_edge = self.embedding_edge_lin(r_edge)
         
-        real_graph=graph.node_type_subgraph(['r_nd'])
-        real_graph.set_batch_num_nodes(graph.batch_num_nodes('r_nd'))
-        real_graph.set_batch_num_edges(graph.batch_num_edges('r2r'))
         r_node, score = self.ISATconv(graph, r_node, r_edge, i_node, d_edge)
-        
-        h = self.reduce(real_graph, r_node)
+        h = graph_sum_pool(relation_graph(graph, 'r_nd', 'r2r'), r_node)
         h = self.linears(h)
 
         if kargs.get('get_score',False):
             return {'prediction':h, 'positive':score}
 
         return h
-        
-    def loss_fn(self, scores, targets):
-        return nn.MSELoss()(targets[~torch.isnan(targets)],scores[~torch.isnan(targets)])
+
+network = ISAT

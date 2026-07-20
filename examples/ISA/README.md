@@ -13,3 +13,32 @@ Conventional attention has no capacity to inform how the feature effects on the 
 For effective analysis, it will be better to see the statistical score distribution, rather than the score of single moleucle. ISA Analyzer supports the simple statistical analysis through the dataset.
 
 ![Example of statistical analysis of ISA analyzer](assets/images/img3.png)
+
+### Aligned Analyzer API
+
+Load the saved training-time fragmentation rules and keep fragment/atom indices
+with every result:
+
+```python
+from D4CMPP2 import Analyzer
+
+analyzer = Analyzer(
+    "path/to/saved/ISA/model",
+    save_result=False,
+    device="cpu",
+)
+analysis = analyzer.analyze_rows(
+    ["CCOC(=O)c1ccccc1"],
+    include_features=False,
+)
+row = analysis[0]
+print(row.fragment_atom_indices)
+print(row.score_mode, row.scores["positive"])
+analyzer.plot_analysis(row, score="positive")
+```
+
+`Analyzer(model_path)` returns `ISAAnalyzer_v2` for positive-only ISA/GC models
+and `ISAPNAnalyzer_v2` for ISATPN models. ISAT scores are atom-aligned;
+GC/ISATPN scores and ISATPN hidden features are
+fragment-aligned. `row.atom_scores("positive")` performs an explicit
+fragment-to-atom expansion for visualization.

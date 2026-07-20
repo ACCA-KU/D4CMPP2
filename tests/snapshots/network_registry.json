@@ -1,0 +1,15 @@
+{
+  "AFP": ["AFP1", "AFP_model", "MolDataManager", "MolDataManager", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "AFP", "2.0"],
+  "AFPwS": ["AFP1", "AFPwithSolv_model", "MolDataManager", "MolDataManager_withSolv", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "AFP", "2.0"],
+  "DMPNN": ["DMPNN1", "DMPNN_model", "MolDataManager", "MolDataManager", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "DMPNN", "2.0"],
+  "DMPNNwS": ["DMPNN1withSolvent", "DMPNNwithSolv_model", "MolDataManager", "MolDataManager_withSolv", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "DMPNN", "2.0"],
+  "GAT": ["GAT1", "GAT_model", "MolDataManager", "MolDataManager", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "GAT", "2.0"],
+  "GATwS": ["GAT1withSolvent", "GATwithSolv_model", "MolDataManager", "MolDataManager_withSolv", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "GAT", "2.0"],
+  "GC": ["GC1", "GC_model", "ISADataManager", "ISADataManager", "NetworkManager", "NetworkManager", "ISATrainManager", "ISATrainer", "GC", "2.0"],
+  "GCN": ["GCN1", "GCN_model", "MolDataManager", "MolDataManager", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "GCN", "2.0"],
+  "GCNwS": ["GCN1withSolvent", "GCNwithSolv_model", "MolDataManager", "MolDataManager_withSolv", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "GCN", "2.0"],
+  "ISAT": ["ISAT1", "ISAT_model", "ISADataManager", "ISADataManager", "ISANetworkManager", "ISANetworkManager", "ISATrainManager", "ISATrainer", "IGS", "2.0"],
+  "ISATPN": ["ISATPN", "ISATPN_model", "ISADataManager", "ISADataManager", "ISANetworkManager", "ISANetworkManager", "ISATrainManager", "ISATrainer", "ISATPN", "2.0"],
+  "MPNN": ["MPNN1", "MPNN_model", "MolDataManager", "MolDataManager", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "MPNN", "2.0"],
+  "MPNNwS": ["MPNN1withSolvent", "MPNNwithSolv_model", "MolDataManager", "MolDataManager_withSolv", "NetworkManager", "NetworkManager", "TrainManager", "Trainer", "MPNN", "2.0"]
+}

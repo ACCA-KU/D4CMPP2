@@ -1,0 +1,13 @@
+compound,target_a,target_b,set
+CCO,1.0,10.0,train
+CC,1.2,10.2,train
+CCC,1.4,10.4,train
+CCCC,1.6,,train
+CCN,1.8,10.8,train
+CCCN,2.0,11.0,train
+CCOCC,2.2,11.2,train
+CCCO,2.4,11.4,train
+CCCl,2.6,11.6,val
+CCBr,2.8,11.8,val
+c1ccccc1,3.0,12.0,test
+CC(=O)O,3.2,12.2,test

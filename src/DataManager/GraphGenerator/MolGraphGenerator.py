@@ -1,9 +1,9 @@
-import dgl
 import torch
 import rdkit.Chem as Chem
 import numpy as np
 import traceback
-from D4CMPP.src.utils.featureizer import get_atom_features, get_bond_features, InvalidAtomError
+from torch_geometric.data import Data
+from D4CMPP2.src.utils.featureizer import get_atom_features, get_bond_features, InvalidAtomError
 
 class MolGraphGenerator:
     def __init__(self):
@@ -20,7 +20,7 @@ class MolGraphGenerator:
     def get_graph(self,smi,**kwargs):
         mol = Chem.MolFromSmiles(smi)
             
-        if kwargs.get("explicit_h",False):
+        if kwargs.get("explicit_h",False) or mol.GetNumAtoms() == 1:
             mol = Chem.AddHs(mol)
         if mol is None: 
             raise Exception("Invalid SMILES: failed to generate mol object")
@@ -30,17 +30,25 @@ class MolGraphGenerator:
         return g
     
     def get_empty_graph(self):
-        return dgl.graph(([],[]))
+        return Data(
+            x=torch.zeros((0, self.node_dim), dtype=torch.float32),
+            edge_index=torch.empty((2, 0), dtype=torch.long),
+            edge_attr=torch.zeros((0, self.edge_dim), dtype=torch.float32),
+            num_nodes=0,
+        )
 
     # Add the features to the graph
     def add_feature(self, g, mol):
         atom_feature = self.af(mol)
-        g.ndata['f'] = torch.tensor(atom_feature).float()
-
-        bond_feature = self.bf(mol)
-        edata = torch.tensor(bond_feature).float()
-        edata = torch.cat([edata,edata],dim=0)
-        g.edata['f'] = edata
+        g.x = torch.tensor(atom_feature).float()
+        
+        if mol.GetNumBonds() == 0:
+            g.edge_attr = torch.zeros((0,self.edge_dim)).float()
+        else:
+            bond_feature = self.bf(mol)
+            edata = torch.tensor(bond_feature).float()
+            edata = torch.cat([edata,edata],dim=0)
+            g.edge_attr = edata
         return g
     
     # Generate the graph from the molecule object
@@ -58,5 +66,8 @@ class MolGraphGenerator:
     
     def generate_graph(self,mol):
         mol_data = self.generate_mol_graph(mol)            
-        g = dgl.graph(mol_data, num_nodes=mol.GetNumAtoms())
+        g = Data(
+            edge_index=torch.tensor(mol_data, dtype=torch.long),
+            num_nodes=mol.GetNumAtoms(),
+        )
         return g

@@ -1,10 +1,10 @@
-DATA_PATH: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/_Data/Aqsoldb.csv
-FRAG_REF: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/src/utils/functional_group.csv
-GRAPH_DIR: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/examples/general/_Graphs
-MODEL_DIR: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/examples/general/_Models
-MODEL_PATH: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/examples/general/_Models/GCN_model_Aqsoldb_Solubility_20240727_213300
-NET_DIR: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/networks
-NET_REFER: /home/ufslab223/jyp/D4CMPP_test/pypi/D4CMPP/network_refer.yaml
+DATA_PATH: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/_Data/Aqsoldb.csv
+FRAG_REF: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/src/utils/functional_group.csv
+GRAPH_DIR: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/examples/general/_Graphs
+MODEL_DIR: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/examples/general/_Models
+MODEL_PATH: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/examples/general/_Models/GCN_model_Aqsoldb_Solubility_20240727_213300
+NET_DIR: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/networks
+NET_REFER: /home/ufslab223/jyp/D4CMPP2_test/pypi/D4CMPP2/network_refer.yaml
 batch_size: 128
 conv_layers: 6
 data: Aqsoldb

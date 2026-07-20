@@ -1,14 +1,20 @@
 import torch
 from torch.utils.data import Dataset
-import dgl
+from torch_geometric.data import Batch
 import numpy as np
+from ..contracts import (
+    GENERAL_BATCH_CONTRACT,
+    LEGACY_GENERAL_BATCH_CONTRACT,
+    LEGACY_SOLVENT_BATCH_CONTRACT,
+)
 
-class GraphDataset(Dataset):
+class GraphDataset_legacy(Dataset):
+    batch_contract = LEGACY_GENERAL_BATCH_CONTRACT
     def __init__(self, graphs=None, target=None, smiles=None):
         if graphs is None: return
         self.graphs = graphs
-        self.node_feature = [g.ndata['f'] for g in graphs]
-        self.edge_feature = [g.edata['f'] for g in graphs]
+        self.node_feature = [g.x for g in graphs]
+        self.edge_feature = [g.edge_attr for g in graphs]
         self.target = torch.tensor(target).float()
         self.smiles = smiles
 
@@ -34,7 +40,7 @@ class GraphDataset(Dataset):
         target = [self.target[i] for i in idx]
         smiles = [self.smiles[i] for i in idx]
         
-        dataset = GraphDataset()
+        dataset = GraphDataset_legacy()
         dataset.reload((graphs, node_feature, edge_feature, target, smiles))
         return dataset
         
@@ -42,7 +48,7 @@ class GraphDataset(Dataset):
     @staticmethod
     def collate(samples):
         graphs, node_feature, edge_feature, target, smiles = map(list, zip(*samples))
-        batched_graph = dgl.batch(graphs)
+        batched_graph = Batch.from_data_list(graphs)
         return batched_graph, torch.concat(node_feature,dim=0), torch.concat(edge_feature,dim=0), torch.stack(target,dim=0), smiles
     
     @staticmethod
@@ -53,13 +59,14 @@ class GraphDataset(Dataset):
         target = target.float().to(device=device)
         return {"graph":batch_graph, "node_feats":node_feature, "edge_feats":edge_feature, "target":target, "smiles":smiles}
 
-class GraphDataset_withSolv(GraphDataset):
+class GraphDataset_withSolv(GraphDataset_legacy):
+    batch_contract = LEGACY_SOLVENT_BATCH_CONTRACT
     def __init__(self, graphs=None, solv_graphs=None, target=None, smiles=None, solv_smiles=None):
         super().__init__(graphs, target, smiles)
         if graphs is None: return
         self.solv_graphs = solv_graphs
-        self.solv_node_feature = [g.ndata['f'] for g in solv_graphs]
-        self.solv_edge_feature = [g.edata['f'] for g in solv_graphs]
+        self.solv_node_feature = [g.x for g in solv_graphs]
+        self.solv_edge_feature = [g.edge_attr for g in solv_graphs]
         self.solv_smiles = solv_smiles
 
     def __getitem__(self, idx):
@@ -102,8 +109,8 @@ class GraphDataset_withSolv(GraphDataset):
     def collate(samples):
         graphs, node_feature, edge_feature, target, smiles, solv_graphs, solv_node_feature, solv_edge_feature, solv_smiles = map(list, zip(*samples))
 
-        batched_graph = dgl.batch(graphs)
-        batched_solv_graph = dgl.batch(solv_graphs)
+        batched_graph = Batch.from_data_list(graphs)
+        batched_solv_graph = Batch.from_data_list(solv_graphs)
         return batched_graph, torch.concat(node_feature,dim=0), torch.concat(edge_feature,dim=0), batched_solv_graph, torch.concat(solv_node_feature,dim=0), torch.concat(solv_edge_feature,dim=0), torch.stack(target,dim=0), smiles, solv_smiles
     
     @staticmethod
@@ -119,8 +126,9 @@ class GraphDataset_withSolv(GraphDataset):
         return {"graph":batch_graph, "node_feats":node_feature, "edge_feats":edge_feature, "solv_graph":batch_solv_graph, "solv_node_feats":solv_node_feature, "solv_edge_feats":solv_edge_feature, "target":target, "smiles":smiles, "solv_smiles":solv_smiles}
     
 
-class GraphDataset_v1p3(GraphDataset):
-    def __init__(self, graphs : dict = None, numeric_inputs : dict = None, target : list = None, smiles : dict = None):
+class GraphDataset(GraphDataset_legacy):
+    batch_contract = GENERAL_BATCH_CONTRACT
+    def __init__(self, graphs : dict = None, numeric_inputs : dict = None, target : list = None, smiles : dict = None, row_indices=None):
         if graphs is None: 
             self.graphs = {}
             self.target = None
@@ -130,8 +138,8 @@ class GraphDataset_v1p3(GraphDataset):
 
         for key in graphs:
             setattr(self, key + '_graphs', graphs[key])
-            setattr(self, key + '_node_feature', [g.ndata['f'] for g in graphs[key]])
-            setattr(self, key + '_edge_feature', [g.edata['f'] for g in graphs[key]])
+            setattr(self, key + '_node_feature', [g.x for g in graphs[key]])
+            setattr(self, key + '_edge_feature', [g.edge_attr for g in graphs[key]])
 
         if numeric_inputs is not None:
             for key in numeric_inputs:
@@ -144,7 +152,10 @@ class GraphDataset_v1p3(GraphDataset):
                 raise ValueError(f"Key '{key}' in smiles is not found in graphs.")
             setattr(self, key + '_smiles', smiles[key])
 
-        self.target = torch.tensor(target).float() if target is not None else None
+        self.target = torch.as_tensor(target).float() if target is not None else None
+        self.original_row_index = (
+            torch.as_tensor(row_indices, dtype=torch.long) if row_indices is not None else None
+        )
         self.data_keys = list(graphs.keys()) + list(numeric_inputs.keys()) + ['target']
 
 
@@ -180,25 +191,62 @@ class GraphDataset_v1p3(GraphDataset):
                     if type(ef) is not torch.Tensor:
                         ef = torch.tensor(ef, dtype=torch.float32)
                     item[key + '_edge_feature'] = ef
+                if hasattr(self, key + '_smiles'):
+                    item[key + '_smiles'] = getattr(self, key + '_smiles')[idx]
             elif hasattr(self, key + '_var'):
-                item[key + '_var'] = torch.tensor(getattr(self, key + '_var')[idx], dtype=torch.float32)
+                var = getattr(self, key + '_var')[idx]
+                if torch.is_tensor(var):
+                    var = var.float()
+                else:
+                    var = torch.tensor(var, dtype=torch.float32)
+                item[key + '_var'] = var
             elif hasattr(self, key + '_smiles'):
                 item[key + '_smiles'] = getattr(self, key + '_smiles')[idx]
         if hasattr(self, 'target') and self.target is not None:
-            if type(self.target) is not torch.Tensor:
-                self.target = torch.tensor(self.target, dtype=torch.float32)
             item['target'] = self.target[idx]
+        if self.original_row_index is not None:
+            item['original_row_index'] = self.original_row_index[idx]
         return item
 
     def reload(self, data):
+        if len(data) == 0:
+            self.target = None
+            self.data_keys = []
+            return
+
         new_data_keys = []
         for key in data[0]:
-            setattr(self, key, [d[key] for d in data])
+            values = [d[key] for d in data]
+            if key == 'target':
+                if len(values) == 0:
+                    setattr(self, key, None)
+                elif torch.is_tensor(values[0]):
+                    target = torch.stack(values, dim=0).float()
+                    if target.dim() == 1:
+                        target = target.unsqueeze(-1)
+                    setattr(self, key, target)
+                else:
+                    target = torch.tensor(values, dtype=torch.float32)
+                    if target.dim() == 1:
+                        target = target.unsqueeze(-1)
+                    setattr(self, key, target)
+            elif key == 'original_row_index':
+                setattr(self, key, torch.as_tensor(values, dtype=torch.long))
+            elif key.endswith('_var'):
+                if len(values) == 0:
+                    setattr(self, key, torch.empty((0,), dtype=torch.float32))
+                elif torch.is_tensor(values[0]):
+                    setattr(self, key, torch.stack(values, dim=0).float())
+                else:
+                    setattr(self, key, torch.tensor(values, dtype=torch.float32))
+            else:
+                setattr(self, key, values)
             if key.endswith('_graphs'):
                 new_data_keys.append(key[:-7])  # Remove '_graphs'
+            elif key.endswith('_var'):
+                new_data_keys.append(key[:-4])  # Remove '_var'
             elif key == 'target':
                 new_data_keys.append(key)
-
         self.data_keys = new_data_keys
 
 
@@ -209,11 +257,22 @@ class GraphDataset_v1p3(GraphDataset):
                 setattr(self, key + '_node_feature', [getattr(self, key + '_node_feature')[i] for i in idx])
                 setattr(self, key + '_edge_feature', [getattr(self, key + '_edge_feature')[i] for i in idx])
             elif hasattr(self, key + '_var'):   
-                setattr(self, key + '_var', getattr(self, key + '_var')[np.array(idx, dtype=int)])
+                var = getattr(self, key + '_var')
+                if torch.is_tensor(var):
+                    setattr(self, key + '_var', var[torch.tensor(idx, dtype=torch.long)])
+                else:
+                    setattr(self, key + '_var', var[np.array(idx, dtype=int)])
             elif hasattr(self, key + '_smiles'):
                 setattr(self, key + '_smiles', [getattr(self, key + '_smiles')[i] for i in idx])
         if self.target is not None:
             self.target = self.target[np.array(idx, dtype=int)]
+        if self.original_row_index is not None:
+            self.original_row_index = self.original_row_index[torch.as_tensor(idx, dtype=torch.long)]
+
+    def get_subDataset(self, idx):
+        dataset = GraphDataset()
+        dataset.reload([self[i] for i in idx])
+        return dataset
 
 
     @staticmethod
@@ -221,7 +280,7 @@ class GraphDataset_v1p3(GraphDataset):
         batched_data = {}
         for key in samples[0].keys():
             if key.endswith('_graphs'):
-                batched_data[key] = dgl.batch([s[key] for s in samples])
+                batched_data[key] = Batch.from_data_list([s[key] for s in samples])
             elif key.endswith('_node_feature'):
                 batched_data[key] = torch.concat([s[key] for s in samples], dim=0)
             elif key.endswith('_edge_feature'):
@@ -232,6 +291,8 @@ class GraphDataset_v1p3(GraphDataset):
                 batched_data[key] = [s[key] for s in samples]
             elif key == 'target':
                 batched_data[key] = torch.stack([s[key].reshape(-1) for s in samples], dim=0)
+            elif key == 'original_row_index':
+                batched_data[key] = torch.stack([s[key].reshape(()) for s in samples], dim=0)
         return batched_data
 
     @staticmethod
@@ -245,6 +306,9 @@ class GraphDataset_v1p3(GraphDataset):
                 batched_data[key] = batched_data[key].float().to(device=device)
             elif key == 'target':
                 batched_data[key] = batched_data[key].float().to(device=device)
+            elif key == 'original_row_index':
+                batched_data[key] = batched_data[key].long().to(device=device)
         return batched_data
+
     
         

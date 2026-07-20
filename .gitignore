@@ -3,3 +3,5 @@ _Graphs/
 _Models/
 .ipynb_checkpoints/
 data/
+!tests/data/
+!tests/data/**

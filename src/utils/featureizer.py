@@ -1,10 +1,9 @@
 import numpy as np
 import os
 import hashlib
-import re
 
 import rdkit.Chem as Chem
-from rdkit.Chem import AllChem, rdMolTransforms, MACCSkeys
+from rdkit.Chem import AllChem, MACCSkeys
 
 class InvalidAtomError(Exception):
     pass
@@ -116,11 +115,12 @@ def load_xyz(smiles,xyz_path):
 def to_float(a):
     try:
         return float(a)
-    except:
+    except ValueError as exc:
         if '*^' in a:
             return float(a.replace('*^','e'))
-        else:
-            return 0
+        raise ValueError(
+            f"XYZ coordinate {a!r} is not numeric. Check the cached XYZ file."
+        ) from exc
 
 
 def get_bond_features_conformer(mol, conf=None, xyz_path=None):

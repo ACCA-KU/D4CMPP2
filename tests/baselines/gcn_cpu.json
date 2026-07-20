@@ -1,0 +1,18 @@
+{
+  "status": "recorded",
+  "reason": "Recorded from two identical fixed-seed runs after train-only target scaling in the server CPU environment.",
+  "backend_at_test_authoring": "DGL 2.4.0+cu118",
+  "planned_backend": "PyTorch Geometric",
+  "python": "3.10.13",
+  "pytorch": "2.2.0",
+  "rdkit": "2023.9.4",
+  "epochs": 2,
+  "device": "cpu",
+  "seed": 42,
+  "predictions": {
+    "CC": 1.9213465452194214,
+    "CCC": 1.9636867046356201,
+    "CCO": 1.9685018062591553
+  },
+  "tolerance": 1e-5
+}

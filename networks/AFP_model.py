@@ -1,29 +1,61 @@
 import torch.nn as nn
-import torch
 
-from D4CMPP.networks.src.AFP import  AttentiveFP
-from D4CMPP.networks.src.Linear import Linears
-from D4CMPP.networks.src.MPNN import MPNNs
-from dgl.nn import SumPooling
+from D4CMPP2.networks.base import (
+    InputContract,
+    MolecularNetwork,
+    STANDARD_GRAPH_HYPERPARAMETERS,
+    STANDARD_GRAPH_OPTIMIZATION_SPACE,
+)
+from D4CMPP2.networks.src.AFP import  AttentiveFP
+from D4CMPP2.networks.src.Linear import Linears
 
-class network(nn.Module):
+
+class AFP(MolecularNetwork):
+    """Attentive fingerprint network with optional atom-attention output."""
+
+    model_name = "afp"
+    required_config = ("node_dim", "edge_dim", "target_dim")
+    input_contract = InputContract(
+        required=(
+            "compound_graphs",
+            "compound_node_feature",
+            "compound_edge_feature",
+        ),
+        optional=("get_score",),
+    )
+    hyperparameters = STANDARD_GRAPH_HYPERPARAMETERS
+    default_optimization_space = STANDARD_GRAPH_OPTIMIZATION_SPACE
+
     def __init__(self, config):
-        super().__init__()
-        config['dropout']=config.get('dropout', 0.2)
-        config['hidden_dim']=config.get('hidden_dim', 64)
+        super().__init__(config)
 
-        conv_layers = config.get('conv_layers', 4)
-        linear_layers = config.get('linear_layers', 2)
-        dropout = config.get('dropout', 0.2)
+        linear_layers = self.config["linear_layers"]
+        dropout = self.config["dropout"]
+        hidden_dim = self.config["hidden_dim"]
 
-        self.embedding_node_lin = nn.Linear(config['node_dim'], config['hidden_dim'], bias=True)
-        self.embedding_edge_lin = nn.Linear(config['edge_dim'], config['hidden_dim'], bias=True)
+        self.embedding_node_lin = nn.Linear(self.config["node_dim"], hidden_dim, bias=True)
+        self.embedding_edge_lin = nn.Linear(self.config["edge_dim"], hidden_dim, bias=True)
 
-        self.AttentiveFP = AttentiveFP(config)
-        self.Linears = Linears(config['hidden_dim'],config['target_dim'], nn.ReLU(), linear_layers, dropout, False, False, True) 
+        self.AttentiveFP = AttentiveFP(self.config)
+        self.Linears = Linears(hidden_dim,self.config["target_dim"], nn.ReLU(), linear_layers, dropout, False, False, True) 
         
 
-    def forward(self, graph, node_feats, edge_feats, **kwargs):
+    def forward(self, **kwargs):
+        graph = kwargs.get('compound_graphs', kwargs.get('graph'))
+        node_feats = kwargs.get('compound_node_feature', kwargs.get('node_feats'))
+        edge_feats = kwargs.get('compound_edge_feature', kwargs.get('edge_feats'))
+        missing = [
+            name
+            for name, value in {
+                "compound_graphs": graph,
+                "compound_node_feature": node_feats,
+                "compound_edge_feature": edge_feats,
+            }.items()
+            if value is None
+        ]
+        if missing:
+            raise ValueError(f"AFP input is missing required fields {missing!r}.")
+
         node = self.embedding_node_lin(node_feats)
         edge = self.embedding_edge_lin(edge_feats)
 
@@ -36,6 +68,5 @@ class network(nn.Module):
         
         return output
 
-        
-    def loss_fn(self, scores, targets):
-        return nn.MSELoss()(targets[~torch.isnan(targets)],scores[~torch.isnan(targets)])
+
+network = AFP

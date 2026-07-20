@@ -1,43 +1,106 @@
-import torch
 import torch.nn as nn
 
-import dgl
-from dgl.nn import SumPooling
+from D4CMPP2.networks.base import (
+    Hyperparameter,
+    InputContract,
+    MolecularNetwork,
+    STANDARD_GRAPH_HYPERPARAMETERS,
+    STANDARD_GRAPH_OPTIMIZATION_SPACE,
+)
+from D4CMPP2.networks.src.GC import GCconvolution
+from D4CMPP2.networks.src.GCN import graph_sum_pool
+from D4CMPP2.networks.src.pyg_hetero import relation_graph
 
-import matplotlib.pyplot as plt
-from D4CMPP.networks.src.GC import GCconvolution
-from D4CMPP.networks.src.Linear import Linears
+class GroupContributionNetwork(MolecularNetwork):
+    """Group-contribution network over the ISA heterogeneous graph."""
 
-class network(nn.Module):
+    model_name = "group_contribution"
+    required_config = ("node_dim", "edge_dim", "target_dim")
+    input_contract = InputContract(
+        required=(
+            "compound_graphs",
+            "compound_r_node",
+            "compound_i_node",
+            "compound_r2r_edge",
+            "compound_d2d_edge",
+        ),
+        optional=("get_score",),
+    )
+    hyperparameters = {
+        **{
+            name: field
+            for name, field in STANDARD_GRAPH_HYPERPARAMETERS.items()
+            if name != "linear_layers"
+        },
+        "activation": Hyperparameter(
+            "categorical",
+            default="Tanh",
+            values=("Tanh", "Sigmoid", "ReLU", "Identity"),
+            grid=("Tanh", "Sigmoid", "ReLU"),
+            description="Activation applied to the normalized contribution sum.",
+        ),
+    }
+    default_optimization_space = (
+        *(
+            name
+            for name in STANDARD_GRAPH_OPTIMIZATION_SPACE
+            if name != "linear_layers"
+        ),
+        "activation",
+    )
+
     def __init__(self, config):
-        super(network, self).__init__()
+        if "activation" not in config and "func_f" in config:
+            config = {**config, "activation": config["func_f"]}
+        super().__init__(config)
+        if self.config["target_dim"] != 1:
+            raise ValueError(
+                "GroupContributionNetwork requires target_dim=1 because its "
+                "contribution head produces one scalar per molecule."
+            )
 
-        
-        hidden_dim = config.get('hidden_dim', 64)
-        gcn_layers = config.get('conv_layers', 4)
-        dropout = config.get('dropout', 0.2)
-        linear_layers = config.get('linear_layers', 2)
-        last_linear_dim = int(hidden_dim/(2**linear_layers))
-        target_dim = config['target_dim']
+        hidden_dim = self.config["hidden_dim"]
+        gcn_layers = self.config["conv_layers"]
+        dropout = self.config["dropout"]
 
         self.embedding_rnode_lin = nn.Sequential(
-            nn.Linear(config['node_dim'], hidden_dim, bias=False)
+            nn.Linear(self.config["node_dim"], hidden_dim, bias=False)
         )
         self.embedding_inode_lin = nn.Sequential(
             nn.Linear(1, hidden_dim, bias=False)
         )
         self.embedding_edge_lin = nn.Sequential(
-            nn.Linear(config['edge_dim'], hidden_dim, bias=False)
+            nn.Linear(self.config["edge_dim"], hidden_dim, bias=False)
         )
 
         self.GCconv = GCconvolution(hidden_dim, hidden_dim, hidden_dim, nn.LeakyReLU(), gcn_layers, dropout, False, True, 0.1)
         
-        self.reduce = SumPooling()
         self.linear = nn.Linear(1,1)
         self.normalize = nn.LayerNorm(1)
-        self.func_f = getattr(nn, config.get('func_f', 'Tanh'))()
+        self.func_f = getattr(nn, self.config["activation"])()
     
-    def forward(self, graph, r_node, i_node, r_edge, d_edge,**kargs):
+    def forward(self, **kargs):
+        graph = kargs.get('compound_graphs', kargs.get('graph'))
+        r_node = kargs.get('compound_r_node', kargs.get('r_node'))
+        i_node = kargs.get('compound_i_node', kargs.get('i_node'))
+        r_edge = kargs.get('compound_r2r_edge', kargs.get('r_edge'))
+        d_edge = kargs.get('compound_d2d_edge', kargs.get('d_edge'))
+        missing = [
+            name
+            for name, value in {
+                "compound_graphs": graph,
+                "compound_r_node": r_node,
+                "compound_i_node": i_node,
+                "compound_r2r_edge": r_edge,
+                "compound_d2d_edge": d_edge,
+            }.items()
+            if value is None
+        ]
+        if missing:
+            raise ValueError(
+                f"GroupContributionNetwork input is missing required fields {missing!r}."
+            )
+
         r_node = r_node.float()
         r_node = self.embedding_rnode_lin(r_node)
         i_node = i_node.float()
@@ -45,13 +108,8 @@ class network(nn.Module):
         r_edge = r_edge.float()
         r_edge = self.embedding_edge_lin(r_edge)
         
-        dot_graph=graph.node_type_subgraph(['d_nd'])
-        dot_graph.set_batch_num_nodes(graph.batch_num_nodes('d_nd'))
-        dot_graph.set_batch_num_edges(graph.batch_num_edges('d2d'))
-        
         score = self.GCconv(graph, r_node, r_edge, i_node, d_edge)
-        
-        h = self.reduce(dot_graph, score)
+        h = graph_sum_pool(relation_graph(graph, 'd_nd', 'd2d'), score)
         h = self.normalize(h)
         h = self.func_f(h)
         h = self.linear(h)
@@ -60,6 +118,5 @@ class network(nn.Module):
             return {'prediction':h, 'positive':score}
 
         return h
-        
-    def loss_fn(self, scores, targets):
-        return nn.MSELoss()(targets[~torch.isnan(targets)],scores[~torch.isnan(targets)])
+
+network = GroupContributionNetwork

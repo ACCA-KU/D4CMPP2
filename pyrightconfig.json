@@ -1,0 +1,12 @@
+{
+  "include": [
+    "src/DataManager/contracts.py",
+    "src/TrainManager/callbacks.py",
+    "src/utils/config_resolution.py",
+    "src/utils/output.py"
+  ],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none"
+}

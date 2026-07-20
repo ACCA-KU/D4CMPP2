@@ -1,29 +1,60 @@
 
-from D4CMPP.networks.src.GCN import GCNs
-from D4CMPP.networks.src.Linear import Linears
+from D4CMPP2.networks.src.GCN import GCNs, graph_sum_pool
+from D4CMPP2.networks.src.Linear import Linears
 import torch.nn as nn
 import torch
-from dgl.nn import SumPooling
 
 class SolventLayer(nn.Module):
     def __init__(self, config):
         super(SolventLayer, self).__init__()
         
-        hidden_dim = config.get('hidden_dim', 64)
-        linear_layers = min(config.get('linear_layers', 2),6)
+        hidden_dim = config["hidden_dim"]
+        linear_layers = config["linear_layers"]
+        solvent_hidden_dim = config.get("solvent_hidden_dim", 64)
+        solvent_conv_layers = config.get("solvent_conv_layers", 4)
+        solvent_linear_layers = config.get("solvent_linear_layers", 2)
+        solvent_dropout = config.get("solvent_dropout", 0.2)
         self.node_embedding = nn.Linear(config['node_dim'], hidden_dim)
-        self.node_embedding_solv = nn.Linear(config['node_dim'], 64)
+        self.node_embedding_solv = nn.Linear(
+            config["node_dim"], solvent_hidden_dim
+        )
 
-        self.GCNs_solv = GCNs(64, 64, 64, nn.ReLU(), 4, 0.2, False, True)
-        self.Linears2 = Linears(64,64, nn.ReLU(), 2, 0.2, False, False) # in_feats, out_feats, activation, n_layers, dropout=0.2, batch_norm=False, residual_sum = False):
-        self.Linears3 = Linears(hidden_dim+64,config['target_dim'], nn.ReLU(), linear_layers, 0.2, False, False,True) # in_feats, out_feats, activation, n_layers, dropout=0.2, batch_norm=False, residual_sum = False
+        self.GCNs_solv = GCNs(
+            solvent_hidden_dim,
+            solvent_hidden_dim,
+            solvent_hidden_dim,
+            nn.ReLU(),
+            solvent_conv_layers,
+            solvent_dropout,
+            False,
+            True,
+        )
+        self.Linears2 = Linears(
+            solvent_hidden_dim,
+            solvent_hidden_dim,
+            nn.ReLU(),
+            solvent_linear_layers,
+            solvent_dropout,
+            False,
+            False,
+        )
+        self.Linears3 = Linears(
+            hidden_dim + solvent_hidden_dim,
+            config["target_dim"],
+            nn.ReLU(),
+            linear_layers,
+            config.get("dropout", 0.2),
+            False,
+            False,
+            True,
+        )
 
     def forward(self, hidden_feats,solv_graph,solv_node_feats,**kwargs):
         h = hidden_feats
 
         h_solv = self.node_embedding_solv(solv_node_feats)
         h_solv = self.GCNs_solv(solv_graph, h_solv)
-        h_solv = SumPooling()(solv_graph,h_solv)
+        h_solv = graph_sum_pool(solv_graph, h_solv)
 
         h_solv = self.Linears2(h_solv)
         h = torch.cat([h,h_solv],axis=1)

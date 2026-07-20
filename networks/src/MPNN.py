@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-import dgl
 
 
 class MPNN_layer(nn.Module):
@@ -17,29 +16,22 @@ class MPNN_layer(nn.Module):
             if in_node_feats!=out_feats:
                 self.residual_layer = nn.Linear(in_node_feats, out_feats)
 
-    def message_func(self, edges):
-        return {'mail': self.linear( torch.cat([edges.src['h'], edges.dst['h'], edges.data['f']], dim=1) )}
-    
-    def update_func(self, nodes):
-        return {'h': torch.mean(nodes.mailbox['mail'], 1)}
-
-
     def forward(self, graph, node_feats, edge_feats):
-        with graph.local_scope():
-            
-            graph.ndata['h'] = node_feats
-            graph.edata['f'] = edge_feats
-            graph.update_all(self.message_func, self.update_func)
-
-            h = graph.ndata['h']
-            if self.batch_norm:
-                h = self.bn(h)
-            h = self.activation(h)
-            h = self.dropout(h)
-            if self.residual_sum:
-                if node_feats.shape[1]!=h.shape[1]:
-                    node_feats = self.residual_layer(node_feats)
-                h = h + node_feats
+        src, dst = graph.edge_index
+        messages = self.linear(torch.cat([node_feats[src], node_feats[dst], edge_feats], dim=1))
+        h = messages.new_zeros((node_feats.shape[0], messages.shape[1]))
+        h.index_add_(0, dst, messages)
+        degree = messages.new_zeros((node_feats.shape[0], 1))
+        degree.index_add_(0, dst, messages.new_ones((messages.shape[0], 1)))
+        h = h / degree.clamp_min(1)
+        if self.batch_norm:
+            h = self.bn(h)
+        h = self.activation(h)
+        h = self.dropout(h)
+        if self.residual_sum:
+            if node_feats.shape[1]!=h.shape[1]:
+                node_feats = self.residual_layer(node_feats)
+            h = h + node_feats
         return h
     
 class MPNNs(nn.Module):

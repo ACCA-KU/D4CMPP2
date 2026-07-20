@@ -1,7 +1,5 @@
 import torch.nn as nn
 import torch
-import dgl
-from dgl.nn.functional import edge_softmax
 
 class GAT_layer(nn.Module):
     def __init__(self, in_node_feats, hidden_feats, out_feats, activation, dropout=0.2, batch_norm=False, residual_sum = False):
@@ -21,36 +19,32 @@ class GAT_layer(nn.Module):
             if in_node_feats!=out_feats:
                 self.residual_layer = nn.Linear(in_node_feats, out_feats)
 
-    def calc_val(self, edges):
-        return {'val': self.attention_a(
-                            nn.LeakyReLU()(
-                            self.attention_W( torch.cat([edges.src['h'], edges.dst['h']], dim=1) 
-                )))}
-    
-    def message_func(self, edges):
-        return {'score': edges.data['val'], 'h': edges.src['h']}
-    
-    def update_func(self, nodes):
-        return {'h': nn.LeakyReLU()(torch.sum(nodes.mailbox['score']*self.linear(nodes.mailbox['h']), 1))}
-
-
     def forward(self, graph, node_feats):
-        with graph.local_scope():
-            
-            graph.ndata['h'] = node_feats
-            graph.apply_edges(self.calc_val)
-            graph.edata['val'] = edge_softmax(graph, graph.edata['val'])
-            graph.update_all(self.message_func, self.update_func)
+        src, dst = graph.edge_index
+        logits = self.attention_a(
+            nn.LeakyReLU()(self.attention_W(torch.cat([node_feats[src], node_feats[dst]], dim=1)))
+        )
+        max_per_dst = logits.new_full((node_feats.shape[0], logits.shape[1]), -torch.inf)
+        max_per_dst.scatter_reduce_(
+            0, dst[:, None].expand_as(logits), logits, reduce='amax', include_self=True
+        )
+        exponentials = torch.exp(logits - max_per_dst[dst])
+        denominator = logits.new_zeros((node_feats.shape[0], logits.shape[1]))
+        denominator.index_add_(0, dst, exponentials)
+        scores = exponentials / denominator[dst]
 
-            h = graph.ndata['h']
-            if self.batch_norm:
-                h = self.bn(h)
-            h = self.activation(h)
-            h = self.dropout(h)
-            if self.residual_sum:
-                if node_feats.shape[1]!=h.shape[1]:
-                    node_feats = self.residual_layer(node_feats)
-                h = h + node_feats
+        messages = scores * self.linear(node_feats[src])
+        h = messages.new_zeros((node_feats.shape[0], messages.shape[1]))
+        h.index_add_(0, dst, messages)
+        h = nn.LeakyReLU()(h)
+        if self.batch_norm:
+            h = self.bn(h)
+        h = self.activation(h)
+        h = self.dropout(h)
+        if self.residual_sum:
+            if node_feats.shape[1]!=h.shape[1]:
+                node_feats = self.residual_layer(node_feats)
+            h = h + node_feats
         return h
     
 class GATs(nn.Module):

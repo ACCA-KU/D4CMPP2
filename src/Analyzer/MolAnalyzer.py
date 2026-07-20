@@ -1,299 +1,319 @@
-import yaml
-import os
-import numpy as np
-import torch
+"""Compatibility Analyzer classes backed by the row-preserving inference core."""
+
+from __future__ import annotations
+
 import hashlib
+import json
 import pickle
-import importlib
+import warnings
+from pathlib import Path
 
-import rdkit.Chem as Chem
+import numpy as np
+import pandas as pd
+from rdkit import Chem
 
-from D4CMPP.src.utils import PATH, module_loader
+from .core import InferenceCore
+from .results import PredictionResult, UncertaintyResult
+
 
 class MolAnalyzer:
-    """The class for additional tasks after the training."""
-    def __init__(self, model_path, save_result = False):
-        """
-        Args:
-            model_path (str): The path to the model.
-            save_result (bool): If True, every calculated result will be saved in the model_path.        
-        """
+    """Load a saved model and predict molecular properties.
 
-        self.model_path = PATH.find_model_path(model_path)
-        self.save_result = save_result 
-        self.data_path = os.path.join(model_path, 'data')
-        if not os.path.exists(self.data_path) and self.save_result:
-            os.makedirs(self.data_path)
-        
-        config = yaml.load(open(os.path.join(self.model_path,'config.yaml'), 'r'), Loader=yaml.FullLoader)
-        config['MODEL_PATH'] = self.model_path
-        config['LOAD_PATH'] = self.model_path
-        self.config = config
-        self.nm = module_loader.load_network_manager(config)(config, unwrapper = None, temp= True)
-        self.dm = module_loader.load_data_manager(config)(config)
-        self.tm = module_loader.load_train_manager(config)(config)
-        self.nm.set_unwrapper(self.dm.unwrapper)
+    This class preserves the legacy ``predict(smiles, solvent_list=None)`` result
+    mapping. New code should use :meth:`predict_rows` when duplicate or invalid
+    input rows must be retained.
+    """
 
+    def __init__(
+        self,
+        model_path,
+        save_result=False,
+        *,
+        device=None,
+        batch_size=None,
+        model_dir=None,
+    ):
+        self._core = InferenceCore(
+            model_path,
+            device=device,
+            batch_size=batch_size,
+            model_dir=model_dir,
+        )
+        self.model_path = str(self._core.artifacts.root)
+        self.data_path = str(self._core.artifacts.root / "data")
+        self.save_result = bool(save_result)
+        self.config = self._core.config
+        self.dm = self._core.dm
+        self.nm = self._core.nm
+        self.tm = self._core.tm
+        self.scaler = self._core.scaler
+        self.molecule_columns = list(self._core.molecule_columns)
+        self.numeric_input_columns = list(self._core.numeric_input_columns)
+        self.data_keys = ["prediction"]
+        self.for_pickle = []
+        if self.save_result:
+            Path(self.data_path).mkdir(parents=True, exist_ok=True)
 
-        # load scaler
-        if not os.path.exists(os.path.join(self.model_path,'scaler.pkl')):
-            self.scaler = None
-        else:
-            with open(os.path.join(self.model_path,'scaler.pkl'), 'rb') as f:
-                self.scaler = pickle.load(f)
+    def predict_rows(self, *args, **kwargs) -> PredictionResult:
+        """Predict while retaining every original row and its validation status."""
 
-        # the data types to save
-        self.data_keys = ['prediction', ]
-        self.for_pickle = ['fragments', ]
-
-    # the function to prepare the data for the prediction
-    def prepare_temp_data(self, smiles_list, solvents = None):
-        if solvents is not None:
-            valid_smiles = self.dm.init_temp_data(smiles_list, solvents)
-        else:
-             valid_smiles = self.dm.init_temp_data(smiles_list)
-        temp_loader = self.dm.get_Dataloaders(temp=True)
-        return temp_loader, valid_smiles
-    
-
-    # the main function to predict the target values
-    def predict(self, smiles_list, solvent_list = None, dropout=False):
-        if solvent_list is None:
-            if type(smiles_list) is str:
-                smiles_list = [smiles_list]        
-            result = {}
-            for smiles in smiles_list:
-                score = self.load_data(smiles, 'prediction')
-                if score is not None:
-                    result[smiles] = score
-            smiles_list = [smiles for smiles in smiles_list if smiles not in result.keys()]
-        else:
-            if type(smiles_list) is str:
-                smiles_list = [smiles_list]        
-            if type(solvent_list) is str:
-                solvent_list = [solvent_list]
-            result = {}
-            for smiles,solvent in zip(smiles_list,solvent_list):
-                score = self.load_data(smiles+"_"+solvent, 'prediction')
-                if score is not None:
-                    result[(smiles,solvent)] = score
-            _smiles_list = [smiles for smiles,solvent in zip(smiles_list,solvent_list) if (smiles,solvent) not in result.keys()]
-            _solvent_list = [solvent for smiles,solvent in zip(smiles_list,solvent_list) if (smiles,solvent) not in result.keys()]
-            smiles_list = _smiles_list
-            solvent_list = _solvent_list
-
-        if len(smiles_list) > 0 :
-            smiles_list, solvent_list = self.add_dummy_into_input(smiles_list, solvent_list)
-            test_loader,valid_smiles = self.prepare_temp_data(smiles_list,solvent_list)
-            valid_compound = valid_smiles['compound']
-            valid_solvent = valid_smiles['solvent'] if 'solvent' in valid_smiles else None
-
-            score,_,_,_ = self.tm.predict(self.nm, test_loader, dropout=dropout)
-            if type(score) is torch.Tensor:
-                score = score.detach().cpu().numpy()
-            smiles_list, solvent_list, score = self.remove_dummy_from_output(valid_compound, valid_solvent, score)
-            if len(score) > 0:
-                score = self.scaler.inverse_transform(score)
-            for i,smiles in enumerate(smiles_list):
-                if solvent_list is not None:
-                    result[(smiles,solvent_list[i])] = score[i]
-                    self.save_data(smiles+"_"+solvent_list[i], {'prediction': score[i]})
-                else:
-                    result[smiles] = score[i]
-                    self.save_data(smiles, {'prediction': score[i]})
+        result = self._core.predict(*args, **kwargs)
+        self._save_prediction_rows(result)
         return result
-    
-    # the functions to save and load the data
-    def save_data(self, smiles, data):
-        if not self.save_result: return
-        for k in data.keys():
-            if k not in self.data_keys:
-                print(f"key must be in {self.data_keys}")
-            file_name = self.get_file_name(smiles, k)
-            if type(data[k]) is torch.Tensor:
-                data[k] = data[k].detach().cpu().numpy()
-            elif not type(data[k]) is np.ndarray:
-                data[k] = np.array(data[k])
-            with open(os.path.join(self.data_path, file_name), 'wb') as f:
-                if k in self.for_pickle:
-                    pickle.dump(data[k],f)
-                else:
-                    np.save(f,data[k],)
 
-    def load_data(self, smiles, key):
-        if not self.save_result: return None
-        file_name = self.get_file_name(smiles, key)
-        if not os.path.exists(os.path.join(self.data_path, file_name)):
-            return None
-        try:
-            with open(os.path.join(self.data_path, file_name), 'rb') as f:
-                if key in self.for_pickle:
-                    return pickle.load(f)
-                return np.load(f)
-        except:
-            return None
-        
-    def get_file_name(self, smiles, key):
-        m = hashlib.sha256()
-        m.update(smiles.encode('utf-8'))
-        name = m.hexdigest()
-        if not key in self.data_keys:
-            raise ValueError(f"key must be in {self.data_keys}")
-        if key in self.for_pickle:
-            return f"{name}_{self.data_keys.index(key)}.pickle"
-        return f"{name}_{self.data_keys.index(key)}.np"
-    
-    # the functions to add and remove dummy data. this is for prevention of the error when the number of input data is only one.
-    def add_dummy_into_input(self, smiles_list, solvent_list = None):        
-        if len(smiles_list) ==1:
-            self.dummy_added = True
-            smiles_list+= ['NCCCC(=O)','c1ccccc1O']
-            if solvent_list is not None:
-                solvent_list+= ['CCO','CCO']
+    def prepare_temp_data(self, *args, **kwargs):
+        """Compatibility bridge for ISA helpers that operate on prepared loaders."""
+
+        normalized = self._core.normalize_inputs(args, kwargs)
+        self.dm.init_temp_data(**{key: list(value) for key, value in normalized.items()})
+        return self.dm.get_Dataloaders(temp=True), {
+            **self.dm.valid_smiles,
+            **self.dm.numeric_inputs,
+        }
+
+    def predict(self, smiles_list, solvent_list=None, dropout=False):
+        """Return the historical SMILES-keyed prediction mapping."""
+
+        if dropout:
+            warnings.warn(
+                "dropout=True returns one stochastic draw and is deprecated. "
+                "Use predict_uncertainty(samples=..., seed=...) for reproducible MC dropout.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            inputs = self._legacy_inputs(smiles_list, solvent_list)
+            uncertainty = self._core.predict_uncertainty(**inputs, samples=2)
+            structured = uncertainty.samples[0]
         else:
-            self.dummy_added = False
-
-        return smiles_list, solvent_list
-    
-    def remove_dummy_from_output(self, smiles_list, solvent_list, score):
-        if self.dummy_added:
-            if solvent_list is not None:
-                if smiles_list[-1]=='NCCCC(=O)' and solvent_list[-1]=='CCO':
-                    smiles_list = smiles_list[:-1]
-                    solvent_list = solvent_list[:-1]
-                    score = score[:-1]
-                if smiles_list[-1]=='c1ccccc1O' and solvent_list[-1]=='CCO':
-                    smiles_list = smiles_list[:-1]
-                    solvent_list = solvent_list[:-1]
-                    score = score[:-1]
-                if smiles_list[-1]=='NCCCC(=O)' and solvent_list[-1]=='CCO':
-                    smiles_list = smiles_list[:-1]
-                    solvent_list = solvent_list[:-1]
-                    score = score[:-1]
-            else:
-                if smiles_list[-1]=='NCCCC(=O)':
-                    smiles_list = smiles_list[:-1]
-                    score = score[:-1]
-                if smiles_list[-1]=='c1ccccc1O':
-                    smiles_list = smiles_list[:-1]
-                    score = score[:-1]
-                if smiles_list[-1]=='NCCCC(=O)':
-                    smiles_list = smiles_list[:-1]
-                    score = score[:-1]
-        return smiles_list, solvent_list, score
-
-class MolAnalyzer_v1p3(MolAnalyzer):
-    """The class for additional tasks after the training. This is for the version 1.3 and later."""
-    def __init__(self, model_path, save_result = True):
-        super().__init__(model_path, save_result)
-        if self.config.get('version', '1.0') < '1.3':
-            raise ValueError("This class is for the version 1.3 and later. Please use MolAnalyzer instead.")
-
-        self.molecule_columns = self.config.get('molecule_columns', ['compound'])
-        self.numeric_input_columns = self.config.get('numeric_input_columns', [])
-
-    def prepare_temp_data(self, **kwargs):
-
-        result = self.dm.init_temp_data(**kwargs)
-        temp_loader = self.dm.get_Dataloaders(temp=True)
-        return temp_loader, result
-
-    def add_dummy_into_input(self, **kwargs):
-        self.dummy_added = False
-        for k in kwargs.keys():
-            if k in self.molecule_columns:
-                smiles_list = kwargs[k]
-                if len(smiles_list) ==1:
-                    self.dummy_added = True
-                    smiles_list+= ['c1ccccc1O']
-                kwargs[k] = smiles_list
-            elif k in self.numeric_input_columns:
-                if len(kwargs[k]) == 1:
-                    self.dummy_added = True
-                    kwargs[k] += [0.0]
-            else:
-                raise ValueError(f"Unknown key {k}. Please provide the smiles for {self.molecule_columns} or numeric input for {self.numeric_input_columns}.")
-        return kwargs
-
-    def remove_dummy_from_output(self, scores, **kwargs):
-        if self.dummy_added:
-            for k in kwargs.keys():
-                if k in self.molecule_columns:
-                    smiles_list = kwargs[k]
-
-                    if smiles_list[-1]=='c1ccccc1O':
-                        smiles_list = smiles_list[:-1]
-                    kwargs[k] = smiles_list
-                else:
-                    kwargs[k] = kwargs[k][:-1]
-            scores = scores[:-1]
-        return scores, kwargs
-
-    def handle_positional_args(self, args, kwargs):
-        if len(args)+len(kwargs) < len(self.molecule_columns) + len(self.numeric_input_columns):
-            raise ValueError(f"Please provide the smiles for {self.molecule_columns} and numeric input for {self.numeric_input_columns}.")
-        if len(args) > 0:
-            print(f"Positional arguments are provided. Note that arguments should be in the order of {self.molecule_columns} and {self.numeric_input_columns}.")
-            if len(args) == len(self.molecule_columns) + len(self.numeric_input_columns):
-                kwargs = {self.molecule_columns[i]: args[i] for i in range(len(self.molecule_columns))}
-                kwargs.update({self.numeric_input_columns[i]: args[i + len(self.molecule_columns)] for i in range(len(self.numeric_input_columns))})
-            elif len(args) == len(self.molecule_columns):
-                kwargs = {self.molecule_columns[i]: args[i] for i in range(len(self.molecule_columns))}
-            elif len(args) == len(self.numeric_input_columns):
-                kwargs = {self.numeric_input_columns[i]: args[i] for i in range(len(self.numeric_input_columns))}
-            else:
-                raise ValueError(f"Please provide the smiles for {self.molecule_columns} and numeric input for {self.numeric_input_columns}.")
-        other_kwargs = {}
-        if len(kwargs) >0:
-            for k in kwargs.keys():
-                if k not in self.molecule_columns and k not in self.numeric_input_columns:
-                    other_kwargs[k] = kwargs.pop(k)
-                
-            for k in self.molecule_columns:
-                if k not in kwargs:
-                    raise ValueError(f"Please provide the smiles for {k}.")
-            for k in self.numeric_input_columns:
-                if k not in kwargs:
-                    raise ValueError(f"Please provide the numeric input for {k}.")
-        for k in kwargs.keys():
-            if type(kwargs[k]) is not list :
-                kwargs[k] = [kwargs[k]]
-        return kwargs, other_kwargs
-
-    def predict(self,*args, dropout=False, **kwargs):
-        # TODO: load the data from the model_path
-        kwargs,_ = self.handle_positional_args(args, kwargs)
-
-        kwargs = self.add_dummy_into_input(**kwargs)
-        test_loader,result = self.prepare_temp_data(**kwargs)
-
-        score,_,_,_ = self.tm.predict(self.nm, test_loader, dropout=dropout)
-        if type(score) is torch.Tensor:
-            score = score.detach().cpu().numpy()
-        score, kwargs = self.remove_dummy_from_output( score, **result)
-        if len(score) > 0:
-            score = self.scaler.inverse_transform(score)
+            structured = self.predict_rows(**self._legacy_inputs(smiles_list, solvent_list))
 
         result = {}
-        for i in range(len(score)):
-            input_data = (kwargs[k][i] for k in self.molecule_columns + self.numeric_input_columns)
-            result[tuple(input_data)] = score[i]
-            # TODO: save the data
-
-        # for i,smiles in enumerate(smiles_list):
-        #     if solvent_list is not None:
-        #         result[(smiles,solvent_list[i])] = score[i]
-        #         self.save_data(smiles+"_"+solvent_list[i], {'prediction': score[i]})
-        #     else:
-        #         result[smiles] = score[i]
-        #         self.save_data(smiles, {'prediction': score[i]})
+        for row in structured.valid_rows:
+            smiles = row.inputs[self.molecule_columns[0]]
+            if solvent_list is None:
+                result[smiles] = row.prediction
+            else:
+                solvent_column = self.molecule_columns[1]
+                result[(smiles, row.inputs[solvent_column])] = row.prediction
         return result
 
+    def _legacy_inputs(self, smiles_list, solvent_list):
+        inputs = {self.molecule_columns[0]: smiles_list}
+        if solvent_list is not None:
+            if len(self.molecule_columns) < 2:
+                raise ValueError(
+                    f"Model {self.model_path!r} does not define a solvent molecule column. "
+                    f"Expected columns: {self.molecule_columns}."
+                )
+            inputs[self.molecule_columns[1]] = solvent_list
+        for column in self.numeric_input_columns:
+            if column not in inputs:
+                raise ValueError(
+                    f"Legacy MolAnalyzer.predict cannot infer required numeric input {column!r}. "
+                    "Use MolAnalyzer_v2.predict with named inputs."
+                )
+        return inputs
 
-def mol_with_atom_index( mol ):
-    if type(mol) is str:
+    def predict_uncertainty(self, *args, samples=30, seed=None, **kwargs) -> UncertaintyResult:
+        """Estimate MC-dropout mean/std without changing the default predict output."""
+
+        return self._core.predict_uncertainty(*args, samples=samples, seed=seed, **kwargs)
+
+    def predict_csv(
+        self,
+        input_path,
+        output_path=None,
+        *,
+        index_col=None,
+        uncertainty_samples=None,
+        uncertainty_seed=None,
+        **read_csv_kwargs,
+    ):
+        """Predict a CSV while preserving every source row and invalid-row error."""
+
+        source = Path(input_path).expanduser().resolve()
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Inference CSV {str(source)!r} does not exist. Provide an existing CSV path."
+            )
+        try:
+            frame = pd.read_csv(source, **read_csv_kwargs)
+        except (pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError) as exc:
+            raise ValueError(
+                f"Could not read inference CSV {str(source)!r}. "
+                "Check its encoding, delimiter, header, and row structure."
+            ) from exc
+        missing = [column for column in self._core.input_columns if column not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"Inference CSV {str(source)!r} is missing required columns {missing}. "
+                f"Available columns: {list(frame.columns)}."
+            )
+        if index_col is not None and index_col not in frame.columns:
+            raise ValueError(
+                f"Inference CSV {str(source)!r} does not contain index_col "
+                f"{index_col!r}. Available columns: {list(frame.columns)}."
+            )
+        source_indices = (
+            frame[index_col].tolist()
+            if index_col is not None
+            else frame.index.tolist()
+        )
+        inputs = {column: frame[column].tolist() for column in self._core.input_columns}
+        uncertainty = None
+        if uncertainty_samples is None:
+            result = self.predict_rows(**inputs)
+        else:
+            uncertainty = self.predict_uncertainty(
+                **inputs,
+                samples=uncertainty_samples,
+                seed=uncertainty_seed,
+            )
+            result = uncertainty.mean
+        output = result.to_dataframe()
+        if uncertainty is not None:
+            std_frame = uncertainty.std.to_dataframe()
+            for target in self._core.targets:
+                output[f"{target}_pred_std"] = std_frame[f"{target}_pred"]
+            output["uncertainty_samples"] = uncertainty_samples
+        output["row_index"] = source_indices
+        destination = (
+            Path(output_path).expanduser().resolve()
+            if output_path is not None
+            else source.with_name(source.stem + "_prediction.csv")
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(destination.name + ".tmp")
+        output.to_csv(temporary, index=False)
+        temporary.replace(destination)
+        return str(destination)
+
+    def _save_prediction_rows(self, result):
+        if not self.save_result:
+            return
+        for row in result.valid_rows:
+            if not self.numeric_input_columns and len(self.molecule_columns) == 1:
+                identity = row.inputs[self.molecule_columns[0]]
+            elif not self.numeric_input_columns and len(self.molecule_columns) == 2:
+                identity = (
+                    f"{row.inputs[self.molecule_columns[0]]}_"
+                    f"{row.inputs[self.molecule_columns[1]]}"
+                )
+            else:
+                identity = json.dumps(dict(row.inputs), sort_keys=True, default=str)
+            self.save_data(identity, {"prediction": row.prediction})
+
+    def save_data(self, identity, data):
+        """Save compatible per-input Analyzer cache entries."""
+
+        if not self.save_result:
+            return
+        for key, value in data.items():
+            if key not in self.data_keys:
+                raise ValueError(f"Analyzer cache key must be one of {self.data_keys}, got {key!r}.")
+            path = Path(self.data_path) / self.get_file_name(identity, key)
+            if key in self.for_pickle:
+                with path.open("wb") as file:
+                    pickle.dump(value, file)
+            else:
+                with path.open("wb") as file:
+                    np.save(file, np.asarray(value))
+
+    def load_data(self, identity, key):
+        if not self.save_result:
+            return None
+        path = Path(self.data_path) / self.get_file_name(identity, key)
+        if not path.is_file():
+            return None
+        try:
+            with path.open("rb") as file:
+                return pickle.load(file) if key in self.for_pickle else np.load(file)
+        except (OSError, ValueError, EOFError, pickle.PickleError) as exc:
+            warnings.warn(
+                f"Ignoring unreadable Analyzer cache file {str(path)!r}: {exc}. "
+                "The value will be recalculated.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
+
+    def get_file_name(self, identity, key):
+        if key not in self.data_keys:
+            raise ValueError(f"Analyzer cache key must be one of {self.data_keys}, got {key!r}.")
+        digest = hashlib.sha256(str(identity).encode("utf-8")).hexdigest()
+        extension = "pickle" if key in self.for_pickle else "np"
+        return f"{digest}_{self.data_keys.index(key)}.{extension}"
+
+
+class MolAnalyzer_v2(MolAnalyzer):
+    """Generalized Analyzer for named molecule and numeric input columns."""
+
+    def __init__(self, model_path, save_result=True, **kwargs):
+        super().__init__(model_path, save_result=save_result, **kwargs)
+        try:
+            version = tuple(int(part) for part in str(self.config.get("version", "1.0")).split("."))
+        except ValueError as exc:
+            raise ValueError(
+                f"Saved model version {self.config.get('version')!r} is not a dotted numeric version."
+            ) from exc
+        if version < (1, 3):
+            raise ValueError(
+                "MolAnalyzer_v2 requires config version 2.0 or the compatible "
+                "historical version 1.3. Use MolAnalyzer for a version 1.0 model."
+            )
+
+    def predict(self, *args, dropout=False, **kwargs):
+        if dropout:
+            warnings.warn(
+                "dropout=True returns one stochastic draw and is deprecated. "
+                "Use predict_uncertainty(samples=..., seed=...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            structured = self._core.predict_uncertainty(
+                *args, samples=2, **kwargs
+            ).samples[0]
+        else:
+            structured = self.predict_rows(*args, **kwargs)
+        return structured.legacy_dict(self._core.input_columns)
+
+    def handle_positional_args(self, args, kwargs):
+        """Compatibility parser used by ISA plotting methods.
+
+        Analyzer input keys are normalized separately from plotting options, and
+        neither the caller's mapping nor its sequence values are mutated.
+        """
+
+        input_kwargs = {}
+        other_kwargs = {}
+        for key, value in dict(kwargs).items():
+            if key in self._core.input_columns:
+                input_kwargs[key] = value
+            else:
+                other_kwargs[key] = value
+        normalized = self._core.normalize_inputs(args, input_kwargs)
+        return normalized, other_kwargs
+
+
+class MolAnalyzer_v1p3(MolAnalyzer_v2):
+    """Deprecated compatibility name for :class:`MolAnalyzer_v2`."""
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "MolAnalyzer_v1p3 is deprecated; use MolAnalyzer_v2 or Analyzer(...) instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+
+
+def mol_with_atom_index(mol):
+    """Return an RDKit molecule labelled with its zero-based atom indices."""
+
+    if isinstance(mol, str):
         mol = Chem.MolFromSmiles(mol)
-    atoms = mol.GetNumAtoms()
-    for idx in range( atoms ):
-        mol.GetAtomWithIdx( idx ).SetProp( 'molAtomMapNumber', str( mol.GetAtomWithIdx( idx ).GetIdx() ) )
+    if mol is None:
+        raise ValueError("Could not parse molecule for atom-index display.")
+    for index in range(mol.GetNumAtoms()):
+        mol.GetAtomWithIdx(index).SetProp("molAtomMapNumber", str(index))
     return mol

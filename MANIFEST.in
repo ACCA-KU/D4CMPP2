@@ -1,0 +1,10 @@
+include examples/AGENTS.md
+include examples/README.md
+include examples/custom_network.py
+include examples/ISA/segment.py
+include examples/assets/tiny_numeric.csv
+recursive-include examples/training *.py
+recursive-include examples/inference *.py
+recursive-include examples/experiments *.py
+recursive-include examples/extensions *.py
+recursive-include examples/cli *.md

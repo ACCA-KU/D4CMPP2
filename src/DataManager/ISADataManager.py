@@ -1,11 +1,16 @@
-from .MolDataManager import MolDataManager, MolDataManager_v1p3
-from D4CMPP.src.utils import PATH
+from .MolDataManager import MolDataManager
+from D4CMPP2.src.utils import PATH
 
 from .GraphGenerator.ISAGraphGenerator import ISAGraphGenerator
-from .Dataset.ISAGraphDataset import ISAGraphDataset, ISAGraphDataset_v1p3
+from .Dataset.ISAGraphDataset import ISAGraphDataset, ISAGraphDataset_legacy
 
-class ISADataManager(MolDataManager):
+class ISADataManager_legacy(MolDataManager):
     """The class for the data management of the ISA dataset."""
+    feature_dimension_keys = (
+        "node_dim", "edge_dim",
+        "r_node_dim", "i_node_dim", "d_node_dim",
+        "r_edge_dim", "i_edge_dim", "d_edge_dim",
+    )
     def __init__(self, config):
         super().__init__(config)
         self.config.update({
@@ -21,37 +26,42 @@ class ISADataManager(MolDataManager):
         if 'sculptor_a' not in self.config or 'sculptor_c' not in self.config or 'sculptor_s' not in self.config:
             raise Exception("The argument 'sculptor_index' is not defined")
         sculptor_index = (self.config['sculptor_s'],self.config['sculptor_c'],self.config['sculptor_a'])
-        print("Sculptor Index:",sculptor_index)
+        self._output().info(
+            f"[Data] ISA fragmentation index: {sculptor_index!r}."
+        )
+        self.graph_type = 'img'+str(sculptor_index[0])+str(sculptor_index[1])+str(sculptor_index[2])
+        self.gg = ISAGraphGenerator(
+            self.config['MODEL_PATH']+'/functional_group.csv',
+            sculptor_index
+        )
+        self.dataset =ISAGraphDataset_legacy
+        self.unwrapper = self.dataset.unwrapper
+        
+class ISADataManager(MolDataManager):
+    """The class for the data management of the ISA dataset."""
+    feature_dimension_keys = ISADataManager_legacy.feature_dimension_keys
+    def __init__(self, config):
+        super().__init__(config)
+        self.config.update({
+            "r_node_dim": self.gg.r_node_dim,
+            "i_node_dim": self.gg.i_node_dim,
+            "d_node_dim": self.gg.d_node_dim,
+            "r_edge_dim": self.gg.r_edge_dim,
+            "i_edge_dim": self.gg.i_edge_dim,
+            "d_edge_dim": self.gg.d_edge_dim,
+        })
+
+    def import_others(self):
+        if 'sculptor_a' not in self.config or 'sculptor_c' not in self.config or 'sculptor_s' not in self.config:
+            raise Exception("The argument 'sculptor_index' is not defined")
+        sculptor_index = (self.config['sculptor_s'],self.config['sculptor_c'],self.config['sculptor_a'])
+        self._output().info(
+            f"[Data] ISA fragmentation index: {sculptor_index!r}."
+        )
         self.graph_type = 'img'+str(sculptor_index[0])+str(sculptor_index[1])+str(sculptor_index[2])
         self.gg = ISAGraphGenerator(
             self.config['MODEL_PATH']+'/functional_group.csv',
             sculptor_index
         )
         self.dataset =ISAGraphDataset
-        self.unwrapper = self.dataset.unwrapper
-        
-class ISADataManager_v1p3(MolDataManager_v1p3):
-    """The class for the data management of the ISA dataset version 1.3."""
-    def __init__(self, config):
-        super().__init__(config)
-        self.config.update({
-            "r_node_dim": self.gg.r_node_dim,
-            "i_node_dim": self.gg.i_node_dim,
-            "d_node_dim": self.gg.d_node_dim,
-            "r_edge_dim": self.gg.r_edge_dim,
-            "i_edge_dim": self.gg.i_edge_dim,
-            "d_edge_dim": self.gg.d_edge_dim,
-        })
-
-    def import_others(self):
-        if 'sculptor_a' not in self.config or 'sculptor_c' not in self.config or 'sculptor_s' not in self.config:
-            raise Exception("The argument 'sculptor_index' is not defined")
-        sculptor_index = (self.config['sculptor_s'],self.config['sculptor_c'],self.config['sculptor_a'])
-        print("Sculptor Index:",sculptor_index)
-        self.graph_type = 'img'+str(sculptor_index[0])+str(sculptor_index[1])+str(sculptor_index[2])
-        self.gg = ISAGraphGenerator(
-            self.config['MODEL_PATH']+'/functional_group.csv',
-            sculptor_index
-        )
-        self.dataset =ISAGraphDataset_v1p3
         self.unwrapper = self.dataset.unwrapper

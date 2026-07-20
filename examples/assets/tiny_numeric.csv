@@ -1,0 +1,16 @@
+compound,temperature,target,set
+CC,280.0,0.12,train
+CCC,285.0,0.18,train
+CCCC,290.0,0.25,train
+CCO,295.0,0.31,train
+CCN,300.0,0.28,train
+CCCl,305.0,0.36,train
+CCBr,310.0,0.41,train
+CCOC,315.0,0.47,train
+CCNC,320.0,0.44,train
+c1ccccc1,325.0,0.62,train
+Cc1ccccc1,330.0,0.68,val
+Oc1ccccc1,335.0,0.73,val
+Nc1ccccc1,340.0,0.70,val
+CC(=O)O,345.0,0.55,test
+CC(=O)N,350.0,0.58,test

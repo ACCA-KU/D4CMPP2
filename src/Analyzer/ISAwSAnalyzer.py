@@ -33,29 +33,20 @@ class ISAwSAnalyzer(ISAAnalyzer):
     # get the attention score of the given smiles
     def get_score(self, smiles, solvent):
         "get the attention score of the given smiles by its subgroups"
-        # pos_score = self.load_data(smiles, 'positive')
-        # if pos_score is not None:
-        #     neg_score = self.load_data(smiles, 'negative')
-        #     if neg_score is not None:
-        #         return {'positive': pos_score, 'negative': neg_score}
-        #     else:
-        #         return {'positive': pos_score}
-        if False:
-            pass
-        else:            
-            test_loader,_ = self.prepare_temp_data([smiles],[solvent])
-            result = self.tm.get_score(self.nm, test_loader)
-            for k in result.keys():
-                if type(result[k]) is torch.Tensor:
-                    result[k] = result[k].detach().cpu().numpy()
+        test_loader,_ = self.prepare_temp_data([smiles],[solvent])
+        result = self.tm.get_score(self.nm, test_loader)
+        for k in result.keys():
+            if type(result[k]) is torch.Tensor:
+                result[k] = result[k].detach().cpu().numpy()
 
-            result['positive'] = self.get_group_score(smiles, result['positive'])
-            if 'negative' in result:
-                result['negative'] = self.get_group_score(smiles, result['negative'])
-            self.save_data(smiles, result)
-            return result
+        result['positive'] = self.get_group_score(smiles, result['positive'])
+        if 'negative' in result:
+            result['negative'] = self.get_group_score(smiles, result['negative'])
+        self.save_data(smiles, result)
+        return result
 
-    def get_feature(self, smoles, solvent):
+    def _get_feature_single_legacy(self, smiles, solvent):
+        """Legacy single-input solvent feature helper."""
         """
         This function gets the feature of the given smiles and solvent.
 
@@ -66,7 +57,7 @@ class ISAwSAnalyzer(ISAAnalyzer):
         Returns:
             dict: The feature of the given smiles and solvent.
         """
-        test_loader, _ = self.prepare_temp_data([smoles], [solvent])
+        test_loader, _ = self.prepare_temp_data([smiles], [solvent])
         return self.tm.get_feature(self.nm, test_loader)
     
     def get_feature(self, smiles_list, solvent_list, feature=None):

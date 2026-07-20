@@ -3,12 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-import dgl
-from dgl.nn import SumPooling
-
 from .GCN import GCN_layer 
 from .MPNN import MPNN_layer
 from .distGCN import distGCN_layer
+from .pyg_hetero import relation_graph, relation_sum
+
+
+def _unbiased_variance_or_zero(values):
+    """Preserve unbiased variance except for its undefined one-value case."""
+    flattened = values.view(-1)
+    if flattened.numel() == 1:
+        return flattened.sum() * 0.0
+    return torch.var(flattened)
+
 
 class ISATconvolution(nn.Module):
     def __init__(self, in_node_feats, in_edge_feats, out_feats, activation, n_layers, dropout=0.2, batch_norm=False, residual_sum = False, alpha=0.1, max_dist = 4):
@@ -28,20 +35,11 @@ class ISATconvolution(nn.Module):
         self.d2r = s2r_Layer()
         self.batch_norm = nn.BatchNorm1d(1)
         
-        self.reduce = SumPooling()
     
     def forward(self, graph, r_node, r2r_edge, i_node, d2d_edge):
-        real_graph=graph.node_type_subgraph(['r_nd'])
-        real_graph.set_batch_num_nodes(graph.batch_num_nodes('r_nd'))
-        real_graph.set_batch_num_edges(graph.batch_num_edges('r2r'))
-        
-        image_graph=graph.node_type_subgraph(['i_nd'])
-        image_graph.set_batch_num_nodes(graph.batch_num_nodes('i_nd'))
-        image_graph.set_batch_num_edges(graph.batch_num_edges('i2i'))
-                
-        dot_graph=graph.node_type_subgraph(['d_nd'])
-        dot_graph.set_batch_num_nodes(graph.batch_num_nodes('d_nd'))
-        dot_graph.set_batch_num_edges(graph.batch_num_edges('d2d'))
+        real_graph = relation_graph(graph, 'r_nd', 'r2r')
+        image_graph = relation_graph(graph, 'i_nd', 'i2i')
+        dot_graph = relation_graph(graph, 'd_nd', 'd2d')
 
         for i in range(len(self.r2r)):
             r_node = self.r2r[i](real_graph, r_node, r2r_edge)
@@ -88,21 +86,12 @@ class ISATconvolution_PM(nn.Module):
         self.batch_norm_P = nn.BatchNorm1d(1)
         self.batch_norm_M = nn.BatchNorm1d(1)
         
-        self.reduce = SumPooling()
     
     def forward(self, graph, r_node, r2r_edge, i_node, d2d_edge, **kargs):
                 
-        real_graph=graph.node_type_subgraph(['r_nd'])
-        real_graph.set_batch_num_nodes(graph.batch_num_nodes('r_nd'))
-        real_graph.set_batch_num_edges(graph.batch_num_edges('r2r'))
-        
-        image_graph=graph.node_type_subgraph(['i_nd'])
-        image_graph.set_batch_num_nodes(graph.batch_num_nodes('i_nd'))
-        image_graph.set_batch_num_edges(graph.batch_num_edges('i2i'))
-                
-        dot_graph=graph.node_type_subgraph(['d_nd'])
-        dot_graph.set_batch_num_nodes(graph.batch_num_nodes('d_nd'))
-        dot_graph.set_batch_num_edges(graph.batch_num_edges('d2d'))
+        real_graph = relation_graph(graph, 'r_nd', 'r2r')
+        image_graph = relation_graph(graph, 'i_nd', 'i2i')
+        dot_graph = relation_graph(graph, 'd_nd', 'd2d')
 
         i_node_P = i_node
         i_node_M = i_node
@@ -140,8 +129,8 @@ class ISATconvolution_PM(nn.Module):
         if kargs.get('get_feature',False):
             return score_P_temp, score_M_temp, score_P, score_M # score by group, score by atom
         
-        self.p_score_var = torch.var(score_P.view(-1))
-        self.n_score_var = torch.var(score_M.view(-1))
+        self.p_score_var = _unbiased_variance_or_zero(score_P)
+        self.n_score_var = _unbiased_variance_or_zero(score_M)
         self.p_score_mean = torch.mean(score_P.view(-1))
         self.n_score_mean = torch.mean(score_M.view(-1))
         self.p_score_ms = torch.mean(torch.square(0.5-score_P.view(-1)))
@@ -151,23 +140,14 @@ class ISATconvolution_PM(nn.Module):
 class r2i_layer(nn.Module):
     def forward(self,graph, r_node, i_node):
         return i_node+r_node
-    
+
+
 class i2s_layer(nn.Module):
     def forward(self,graph, i_node):
-        with graph.local_scope():
-            graph=graph.edge_type_subgraph([('i_nd','i2d','d_nd')])
-            graph.nodes['i_nd'].data['h']= i_node
-            graph.update_all(dgl.function.copy_u('h', 'mail'), dgl.function.sum('mail', 'h'))
-            d_node = graph.nodes['d_nd'].data['h']
-        return d_node    
+        return relation_sum(graph, 'i_nd', 'i2d', 'd_nd', i_node)
 
 
-class s2r_Layer(nn.Module):    
+class s2r_Layer(nn.Module):
     def forward(self, graph, node):
-        with graph.local_scope():
-            graph=graph.edge_type_subgraph([('d_nd','d2r','r_nd')])
-            graph.nodes['d_nd'].data['h']= node
-            graph.update_all(dgl.function.copy_u('h', 'mail'), dgl.function.sum('mail', 'h'))
-            score = graph.nodes['r_nd'].data['h']
-        return score
+        return relation_sum(graph, 'd_nd', 'd2r', 'r_nd', node)
 

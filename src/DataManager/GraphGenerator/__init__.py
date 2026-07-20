@@ -1,9 +1,14 @@
-import importlib
-import pkgutil
+"""Lazy exports for built-in graph-generator modules."""
 
-__all__ = []  
-for loader, module_name, is_pkg in pkgutil.iter_modules(__path__):
-    if not is_pkg:
-        full_module_name = f"{__name__}.{module_name}"
-        module = importlib.import_module(full_module_name)
-        __all__.extend(dir(module))
+from importlib import import_module
+from types import ModuleType
+
+__all__ = ["MolGraphGenerator", "ISAGraphGenerator"]
+
+
+def __getattr__(name: str) -> ModuleType:
+    if name not in __all__:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(f"{__name__}.{name}")
+    globals()[name] = module
+    return module

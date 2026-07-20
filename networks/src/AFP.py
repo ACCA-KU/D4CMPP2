@@ -4,11 +4,19 @@ This codes are modified from the project "GC-GNN" (https://github.com/gsi-lab/GC
 The original codes are under the MIT License. (https://github.com/gsi-lab/GC-GNN/blob/main/networks/AttentiveFP.py)
 """
 
-import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dgl.nn.pytorch import edge_softmax
+from D4CMPP2.networks.src.GCN import graph_sum_pool
+
+
+def _graph_softmax(values, batch, num_graphs):
+    maximum = values.new_full((num_graphs, values.shape[1]), -torch.inf)
+    maximum.scatter_reduce_(0, batch[:, None].expand_as(values), values, reduce='amax', include_self=True)
+    exponentials = torch.exp(values - maximum[batch])
+    denominator = values.new_zeros((num_graphs, values.shape[1]))
+    denominator.index_add_(0, batch, exponentials)
+    return exponentials / denominator[batch]
 
 class Atom_AFPLayer(nn.Module):
     def __init__(self, config):
@@ -36,34 +44,15 @@ class Atom_AFPLayer(nn.Module):
         self.attend[0].reset_parameters()
         self.GRUCell.reset_parameters()
 
-    def update_edge_by_neighbor(self, edges):
-        neighbor_message = self.embedding_edge_lin(torch.cat([edges.src['node_embedded_feats'], edges.data['edge_feats']], dim=-1))
-        return {'neighbor_message': neighbor_message}
-
-    def cal_alignment_score(self, edges):
-        alignment_score = self.cal_alignment(torch.cat([edges.data['neighbor_message'], edges.dst['node_embedded_feats']], dim=-1))
-        return {'score': alignment_score}
-
-    def att_context_passing(self, edges):
-        return {'mail': edges.data['att_context']}
-
-    def cal_context(self, nodes):
-        return {'context': torch.sum(self.dropout(nodes.mailbox['mail']), dim=-2)}
-
     def forward(self, graph, node, edge):
-        graph = graph.local_var()
-        graph.ndata['node_embedded_feats'] = node
-        graph.edata['edge_feats'] = edge
-
-        # update the edge feats by concat edge feats together with the neighborhood node feats
-        graph.apply_edges(self.update_edge_by_neighbor)
-        graph.apply_edges(self.cal_alignment_score)
-        # att= edge_softmax(graph, graph.edata['score'])
-        graph.edata['att_context'] = self.attend(graph.edata['neighbor_message']) #* att
-        graph.update_all(self.att_context_passing, self.cal_context)
-        context = nn.ELU()(graph.ndata['context'])
-        # new_node = F.relu(self.GRUCell( graph.ndata['node_embedded_feats'], context))
-        new_node = node + graph.ndata['context']
+        src, dst = graph.edge_index
+        neighbor_message = self.embedding_edge_lin(torch.cat([node[src], edge], dim=-1))
+        # Retained for state-dict and numerical compatibility although the legacy path did not apply the score.
+        self.cal_alignment(torch.cat([neighbor_message, node[dst]], dim=-1))
+        messages = self.dropout(self.attend(neighbor_message))
+        context = messages.new_zeros(node.shape)
+        context.index_add_(0, dst, messages)
+        new_node = node + context
         return new_node
 
 class Mol_AFPLayer(nn.Module):
@@ -88,16 +77,18 @@ class Mol_AFPLayer(nn.Module):
         self.attend[0].reset_parameters()
 
     def forward(self, graph, super_node, node):
-        graph = graph.local_var()
         super_node = F.leaky_relu(super_node)
-
-        graph.ndata['score'] = self.cal_alignment(torch.cat([node, dgl.broadcast_nodes(graph, super_node)], dim=1))
-        graph.ndata['attention_weight'] = dgl.softmax_nodes(graph, 'score')
-        graph.ndata['hidden_node'] = self.attend(self.dropout(node))
-        super_context = F.elu(dgl.sum_nodes(graph, 'hidden_node', 'attention_weight'))
+        batch = getattr(graph, 'batch', node.new_zeros(node.shape[0], dtype=torch.long))
+        num_graphs = int(getattr(graph, 'num_graphs', 1))
+        score = self.cal_alignment(torch.cat([node, super_node[batch]], dim=1))
+        attention_weight = _graph_softmax(score, batch, num_graphs)
+        hidden_node = self.attend(self.dropout(node)) * attention_weight
+        super_context = hidden_node.new_zeros((num_graphs, hidden_node.shape[1]))
+        super_context.index_add_(0, batch, hidden_node)
+        super_context = F.elu(super_context)
         
         super_node = F.relu(self.GRUCell(super_node, super_context))
-        return super_node, graph.ndata['attention_weight']
+        return super_node, attention_weight
 
 
 class AttentiveFP(nn.Module):
@@ -115,17 +106,13 @@ class AttentiveFP(nn.Module):
             l.reset_parameters()
 
     def forward(self, graph, node, edge, **kwargs):
-        with graph.local_scope():
-            for i in range(len(self.PassingDepth)):
-                node = self.PassingDepth[i](graph, node, edge)
-            
-            graph.ndata['node_feats'] = node
-            if kwargs.get('only_atom', False):
-                return node, None
-            super_node = dgl.sum_nodes(graph, 'node_feats')
-
-            for i in range(len(self.MultiTimeSteps)):
-                super_node, att_w = self.MultiTimeSteps[i](graph, super_node, node)
+        for i in range(len(self.PassingDepth)):
+            node = self.PassingDepth[i](graph, node, edge)
+        if kwargs.get('only_atom', False):
+            return node, None
+        super_node = graph_sum_pool(graph, node)
+        for i in range(len(self.MultiTimeSteps)):
+            super_node, att_w = self.MultiTimeSteps[i](graph, super_node, node)
         return super_node, att_w
 
 
