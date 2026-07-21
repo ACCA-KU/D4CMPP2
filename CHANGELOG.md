@@ -1,18 +1,23 @@
 # Changelog
 
-- Remove repeated PyTorch tensor-copy warnings when Dataset targets are already
-  tensors while preserving the prior detached, independent float32 copy semantics.
-- Report CSV and graph-cache preparation progress, and add the opt-in
-  `data_quality_report=False` and `validate_graph_cache=False` fast paths for
-  previously reviewed data/caches while retaining required CSV and cache identity
-  checks.
-- Move large root API implementations into `D4CMPP2.src.api`; retain the five
-  historical root modules as thin aliases so public imports, CLI, and module-level
-  monkeypatch behavior remain compatible.
-
 This project follows semantic versioning for the Python package. Saved-model
 and config compatibility is documented separately because a package release
 does not automatically invalidate existing model assets.
+
+## 1.0.0
+
+- Stabilized all solvent-aware model pipelines from training and persistence to
+  saved-model Analyzer prediction while retaining legacy Dataset input aliases.
+- Added public end-to-end integration examples for solvent Analyzer and transfer
+  learning workflows, together with a single-command integration runner.
+- Improved transfer-learning config resolution and reporting for compatible,
+  skipped, and shape-mismatched parameters.
+- Added visible CSV and graph-cache preparation status plus opt-in fast paths for
+  repeatedly reviewed data and verified graph caches.
+- Removed repeated Dataset tensor-copy warnings without changing target tensor
+  dtype, detachment, or copy semantics.
+- Moved the main training, optimization, CLI, and exception implementations into
+  `D4CMPP2.src.api`, retaining thin aliases for historical public module paths.
 
 ## 0.4.0
 

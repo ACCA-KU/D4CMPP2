@@ -1,4 +1,4 @@
-__version__ = "0.4.0"
+__version__ = "1.0.0"
 
 from D4CMPP2.src.api.training import train as train
 from D4CMPP2.src.api.legacy_grid_search import grid_search as grid_search
