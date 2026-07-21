@@ -9,7 +9,7 @@ from fixtures import load_source_module
 from markers import heavy_test
 
 
-errors = load_source_module("exceptions.py", "t5_exception_contract")
+errors = load_source_module("src/api/errors.py", "t5_exception_contract")
 output = load_source_module("src/utils/output.py", "t5_output_contract")
 
 

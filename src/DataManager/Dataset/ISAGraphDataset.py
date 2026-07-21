@@ -5,6 +5,12 @@ from torch_geometric.data import Batch
 import numpy as np
 from ..contracts import ISA_BATCH_CONTRACT, LEGACY_ISA_BATCH_CONTRACT
 
+
+def _copy_float_target(target):
+    """Return an independent float32 target tensor without tensor-copy warnings."""
+
+    return torch.as_tensor(target, dtype=torch.float32).detach().clone()
+
 class ISAGraphDataset_legacy(Dataset):
     batch_contract = LEGACY_ISA_BATCH_CONTRACT
     def __init__(self, graphs=None, target=None, smiles=None):
@@ -15,7 +21,7 @@ class ISAGraphDataset_legacy(Dataset):
         self.i_node = [g['i_nd'].x for g in graphs]
         self.d_node = [g['d_nd'].x for g in graphs]
         self.d2d_edge = [g['d_nd', 'd2d', 'd_nd'].edge_attr for g in graphs]
-        self.target = torch.tensor(target).float()
+        self.target = _copy_float_target(target)
         self.smiles = smiles
 
 
@@ -176,7 +182,7 @@ class ISAGraphDataset(ISAGraphDataset_legacy):
                 raise ValueError(f"Key '{key}' in smiles is not found in graphs.")
             setattr(self, key + '_smiles', smiles[key])
 
-        self.target = torch.tensor(target).float() if target is not None else None
+        self.target = _copy_float_target(target) if target is not None else None
         self.original_row_index = (
             torch.as_tensor(row_indices, dtype=torch.long) if row_indices is not None else None
         )

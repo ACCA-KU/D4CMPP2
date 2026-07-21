@@ -77,7 +77,7 @@ class TargetScalerAndAlignmentTests(unittest.TestCase):
     def test_old_load_scope_is_wired(self):
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
-        main_source = (root / "_main.py").read_text(encoding="utf-8")
+        main_source = (root / "src" / "api" / "training.py").read_text(encoding="utf-8")
         self.assertIn("legacy_scaler_scope", main_source)
         self.assertIn("config['target_scaler_fit_scope'] = 'all'", main_source)
 

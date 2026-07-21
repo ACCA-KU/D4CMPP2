@@ -16,7 +16,7 @@ def function(tree, name):
 
 class CurrentFailureContractTests(unittest.TestCase):
     def test_run_defaults_to_raise_and_keeps_explicit_legacy_none_path(self):
-        run = function(parse("_main.py"), "run")
+        run = function(parse("src/api/training.py"), "run")
         handlers = [node for node in ast.walk(run) if isinstance(node, ast.ExceptHandler)]
         self.assertEqual(len(handlers), 2)
         by_name = {
@@ -72,7 +72,7 @@ class CurrentFailureContractTests(unittest.TestCase):
         self.assertTrue(any(isinstance(node, ast.Raise) for node in ast.walk(keyboard_handler)))
         self.assertTrue(any(isinstance(node, ast.Constant) and node.value == "legacy_silent_errors" for node in ast.walk(keyboard_handler)))
 
-        grid = function(parse("grid_search.py"), "grid_search")
+        grid = function(parse("src/api/legacy_grid_search.py"), "grid_search")
         handlers = [node for node in ast.walk(grid) if isinstance(node, ast.ExceptHandler)]
         self.assertEqual(
             [handler.type.id for handler in handlers if isinstance(handler.type, ast.Name)],

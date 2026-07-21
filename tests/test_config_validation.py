@@ -141,6 +141,13 @@ class MergedConfigValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "graph_cache_policy.*v2.*legacy.*regenerate"):
             validation.validate_training_config({**base, "graph_cache_policy": "auto"})
 
+        validation.validate_training_config({**base, "validate_graph_cache": False})
+        with self.assertRaisesRegex(TypeError, "validate_graph_cache.*bool"):
+            validation.validate_training_config({**base, "validate_graph_cache": "false"})
+        validation.validate_training_config({**base, "data_quality_report": False})
+        with self.assertRaisesRegex(TypeError, "data_quality_report.*bool"):
+            validation.validate_training_config({**base, "data_quality_report": "false"})
+
     def test_reproducibility_policy_requires_valid_seed_and_bool(self):
         base = valid_config()
         validation.validate_training_config({**base, "random_seed": 0})
@@ -168,7 +175,9 @@ class ValidationWiringTests(unittest.TestCase):
     def test_training_entry_point_calls_all_early_validation_boundaries(self):
         from pathlib import Path
 
-        source = (Path(__file__).resolve().parents[1] / "_main.py").read_text(encoding="utf-8")
+        source = (
+            Path(__file__).resolve().parents[1] / "src" / "api" / "training.py"
+        ).read_text(encoding="utf-8")
         for call in (
             "validate_entry_args(kwargs)",
             "validate_network_entry(config['network'], net_config",

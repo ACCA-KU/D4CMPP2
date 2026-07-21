@@ -42,3 +42,9 @@ public API, saved asset, graph/network 수치, training, Analyzer, CI/artifact
   repository example source를 직접 로드해 sdist-only 예제 배포 계약을 유지한다.
 - 2026-07-21: wheel smoke의 child venv는 parent에 같은 버전이 설치되어 있어도
   검증 대상 wheel을 강제 재설치해 console script 생성까지 검사한다.
+- 2026-07-21: solvent 5종은 각각 public 1-epoch train, saved source/weight reload,
+  `Analyzer` factory 선택과 compound/solvent row-preserving prediction을 실제로
+  실행해 Dataset-network 검증 이후의 저장·추론 경계까지 보장한다.
+- 2026-07-21: solvent Analyzer heavy test는 workflow를 다시 구현하지 않고
+  `examples/integration/solvent_analyzer.py` 자체를 isolated subprocess로 실행해
+  예제와 자동 회귀가 같은 public 경로를 공유한다.

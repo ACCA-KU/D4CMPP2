@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class CycleAuditRegressionTests(unittest.TestCase):
     def test_public_batch_size_documentation_matches_runtime_default(self):
-        source = (ROOT / "_main.py").read_text(encoding="utf-8")
+        source = (ROOT / "src" / "api" / "training.py").read_text(encoding="utf-8")
         module = ast.parse(source)
         config_assignment = next(
             node

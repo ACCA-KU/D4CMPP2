@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 import shutil
+import contextlib
+import io
 
 from fixtures import ROOT
 from markers import heavy_test
@@ -97,6 +99,20 @@ class GraphCacheIntegrityTests(unittest.TestCase):
                 ValueError,
                 r"graphs\[0\] edge feature rows=1, but edge_index contains 2 edges",
             ):
+                manager.load_graphs("compound")
+
+            manager.config["validate_graph_cache"] = False
+            manager.molecule_columns = ["compound"]
+            stream = io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                manager.prepare_graph()
+            self.assertIn("per-graph tensor validation=skipped", stream.getvalue())
+            self.assertEqual(len(manager.molecule_graphs["compound"]), 1)
+
+            payload = torch.load(path, weights_only=False)
+            payload["smiles"] = ["CCC"]
+            torch.save(payload, path)
+            with self.assertRaisesRegex(ValueError, "ordered SMILES do not match"):
                 manager.load_graphs("compound")
 
     @heavy_test

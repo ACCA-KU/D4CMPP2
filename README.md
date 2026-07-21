@@ -1,8 +1,23 @@
 # D4CMPP2
 
-D4CMPP2 is a PyTorch Geometric package for molecular-property regression. It
-supports ordinary molecular graphs, compound/solvent pairs, and interpretable
-ISA models through one training and inference API.
+D4CMPP2 is the next-generation implementation of the D4CMPP framework. It is based on the original [D4CMPP](https://github.com/ACCA-KU/DeepMPP) project and was extensively redeveloped with OpenAI Codex through an AI-assisted, test-driven engineering workflow.
+
+The package provides a unified PyTorch Geometric framework for molecular property prediction, supporting ordinary molecular graphs, compound–solvent pairs, and interpretable ISA models.
+
+Key advantages of D4CMPP2 include:
+
+- **Unified model interface** — Train general molecular, solvent-aware, and ISA-based models through a consistent Python API and command-line interface.
+- **Multiple graph neural network architectures** — Use GCN, MPNN, DMPNN, AttentiveFP, GAT, graph-contribution, and ISA model families within the same workflow.
+- **Interpretable molecular predictions** — Analyze fragment- and atom-level contributions with ISA models while preserving alignment between molecular structures and attribution scores.
+- **Reliable data handling** — Detect invalid SMILES, missing columns, non-numeric targets, misaligned inputs, incompatible graph caches, and invalid dataset splits before they silently affect training.
+- **Efficient repeated experiments** — Reuse fingerprinted graph caches and optionally skip previously completed data-quality and per-graph cache checks.
+- **Transfer learning and training resumption** — Initialize compatible model parameters from existing models or resume complete optimizer and scheduler states from checkpoints.
+- **Reproducible experimentation** — Control random seeds, deterministic execution, dataset splitting, and run metadata across CPU and CUDA environments.
+- **Multi-target and multi-input support** — Train on multiple target properties, compound–solvent pairs, and additional numeric features without changing the overall workflow.
+- **Saved-model analysis** — Reload trained models through `Analyzer` for single or batch prediction while retaining invalid and duplicate input rows.
+- **Experiment tracking and optimization** — Record run manifests, compare completed experiments, and perform grid or Bayesian hyperparameter optimization.
+- **Backward compatibility** — Preserve established D4CMPP APIs, model assets, configuration conventions, and legacy loading paths where practical.
+- **Deployment-oriented validation** — Test source execution, packaged distributions, CLI entry points, model persistence, Analyzer workflows, and CPU-based end-to-end training.
 
 ## Requirements and installation
 
@@ -214,6 +229,32 @@ The cache policies are:
 - `"legacy"`: explicitly load a compatible PyG v1 cache with a warning.
 
 DGL caches are preserved but never loaded.
+
+Data preparation reports when CSV validation and graph-cache loading start and
+finish, so a large cache no longer looks stalled before graph generation. Full
+per-graph tensor validation remains the default. After a cache has already been
+verified and the same data is trained repeatedly, it can be skipped explicitly:
+
+```python
+train(
+    data="data.csv",
+    target=["target"],
+    network="GCN",
+    data_quality_report=False,
+    validate_graph_cache=False,
+)
+```
+
+`data_quality_report=False` skips the slower canonical-SMILES duplicate,
+split-overlap, and issue report after that dataset has already been reviewed.
+Required CSV columns, numeric values, split labels, row alignment, and nonempty
+targets are still checked. `validate_graph_cache=False` still checks the cache
+recipe, ordered SMILES, and graph count; it only skips tensor shape, dtype,
+finite-value, and edge-alignment checks inside each cached graph. Newly generated
+graphs are always validated before saving.
+
+The CLI equivalents are `--skip-data-quality-report` and
+`--skip-graph-cache-validation`.
 
 ## Prediction and analysis
 

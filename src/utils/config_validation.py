@@ -10,7 +10,7 @@ def _dependency_error(message):
     """Keep dependency-light source tests while categorizing package imports."""
 
     try:
-        from D4CMPP2.exceptions import DependencyError
+        from D4CMPP2.src.api.errors import DependencyError
     except ImportError:
         return RuntimeError(message)
     return DependencyError(message)
@@ -160,6 +160,22 @@ def validate_training_config(config, optimizer_names=None):
         raise TypeError(
             f"verbose must be bool, got {verbose!r} ({_type_name(verbose)}). "
             "Use verbose=True to show status output or verbose=False to hide it."
+        )
+
+    validate_graph_cache = config.get("validate_graph_cache", True)
+    if not isinstance(validate_graph_cache, bool):
+        raise TypeError(
+            "validate_graph_cache must be bool, got "
+            f"{validate_graph_cache!r} ({_type_name(validate_graph_cache)}). "
+            "Use False only to skip per-graph tensor checks for a previously verified cache."
+        )
+
+    data_quality_report = config.get("data_quality_report", True)
+    if not isinstance(data_quality_report, bool):
+        raise TypeError(
+            f"data_quality_report must be bool, got {data_quality_report!r} "
+            f"({_type_name(data_quality_report)}). "
+            "Use False only after reviewing the data-quality report for this dataset."
         )
 
     device = config.get("device")

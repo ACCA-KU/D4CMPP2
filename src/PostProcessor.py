@@ -28,6 +28,7 @@ class PostProcessor:
         "The main function for the postprocessing"
         try:
             self.save_final_model(nm)
+            self.save_scaler(dm.scaler)
         except Exception:
             if self.config.get('legacy_silent_errors', False):
                 self.output.error(
@@ -74,9 +75,6 @@ class PostProcessor:
             val_pred = scaler.inverse_transform(val_pred.cpu().numpy())
             test_pred = scaler.inverse_transform(test_pred.cpu().numpy())
 
-            with open(os.path.join(self.config['MODEL_PATH'],"scaler.pkl"),"wb") as file:
-                pickle.dump(scaler,file)
-            
         prediction_df = None
         for true,pred,smiles,sets in zip([train_true,val_true,test_true],[train_pred,val_pred,test_pred],[train_smiles,val_smiles,test_smiles],['train','val','test']):
             data = {}
@@ -135,6 +133,33 @@ class PostProcessor:
         for file in os.listdir(self.config['MODEL_PATH']):
             if checkpoint_pattern.fullmatch(file):
                 os.remove(os.path.join(self.config['MODEL_PATH'], file))
+
+    def save_scaler(self, scaler):
+        """Atomically save the fitted target scaler required by Analyzer."""
+
+        if scaler is None:
+            return
+        model_path = self.config['MODEL_PATH']
+        scaler_path = os.path.join(model_path, "scaler.pkl")
+        staging_path = os.path.join(
+            model_path,
+            f".scaler.pkl.{uuid.uuid4().hex}.tmp",
+        )
+        try:
+            with open(staging_path, "wb") as file:
+                pickle.dump(scaler, file)
+            if not os.path.isfile(staging_path) or os.path.getsize(staging_path) == 0:
+                raise OSError(
+                    f"Scaler staging file {staging_path!r} was not created as a "
+                    "non-empty regular file. The previous scaler.pkl was preserved."
+                )
+            os.replace(staging_path, scaler_path)
+        finally:
+            if os.path.exists(staging_path):
+                try:
+                    os.remove(staging_path)
+                except OSError:
+                    pass
 
     def save_final_model(self, nm):
         """Atomically commit final.pth before removing package checkpoints."""

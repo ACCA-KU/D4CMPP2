@@ -8,6 +8,12 @@ from ..contracts import (
     LEGACY_SOLVENT_BATCH_CONTRACT,
 )
 
+
+def _copy_float_target(target):
+    """Return an independent float32 target tensor without tensor-copy warnings."""
+
+    return torch.as_tensor(target, dtype=torch.float32).detach().clone()
+
 class GraphDataset_legacy(Dataset):
     batch_contract = LEGACY_GENERAL_BATCH_CONTRACT
     def __init__(self, graphs=None, target=None, smiles=None):
@@ -15,7 +21,7 @@ class GraphDataset_legacy(Dataset):
         self.graphs = graphs
         self.node_feature = [g.x for g in graphs]
         self.edge_feature = [g.edge_attr for g in graphs]
-        self.target = torch.tensor(target).float()
+        self.target = _copy_float_target(target)
         self.smiles = smiles
 
     def __len__(self):
@@ -123,7 +129,27 @@ class GraphDataset_withSolv(GraphDataset_legacy):
         solv_edge_feature = solv_edge_feature.float().to(device=device)
         target = target.float().to(device=device)
 
-        return {"graph":batch_graph, "node_feats":node_feature, "edge_feats":edge_feature, "solv_graph":batch_solv_graph, "solv_node_feats":solv_node_feature, "solv_edge_feats":solv_edge_feature, "target":target, "smiles":smiles, "solv_smiles":solv_smiles}
+        return {
+            # Canonical keys consumed by MolecularNetwork.input_contract.
+            "compound_graphs": batch_graph,
+            "compound_node_feature": node_feature,
+            "compound_edge_feature": edge_feature,
+            "compound_smiles": smiles,
+            "solvent_graphs": batch_solv_graph,
+            "solvent_node_feature": solv_node_feature,
+            "solvent_edge_feature": solv_edge_feature,
+            "solvent_smiles": solv_smiles,
+            # Legacy aliases retained for saved/custom network compatibility.
+            "graph": batch_graph,
+            "node_feats": node_feature,
+            "edge_feats": edge_feature,
+            "solv_graph": batch_solv_graph,
+            "solv_node_feats": solv_node_feature,
+            "solv_edge_feats": solv_edge_feature,
+            "target": target,
+            "smiles": smiles,
+            "solv_smiles": solv_smiles,
+        }
     
 
 class GraphDataset(GraphDataset_legacy):
@@ -152,7 +178,7 @@ class GraphDataset(GraphDataset_legacy):
                 raise ValueError(f"Key '{key}' in smiles is not found in graphs.")
             setattr(self, key + '_smiles', smiles[key])
 
-        self.target = torch.as_tensor(target).float() if target is not None else None
+        self.target = _copy_float_target(target) if target is not None else None
         self.original_row_index = (
             torch.as_tensor(row_indices, dtype=torch.long) if row_indices is not None else None
         )

@@ -27,6 +27,26 @@ def parse_args(argv=None):
     parser.add_argument("-c", "--cuda", type=int, help="Deprecated shorthand for --device cuda:N")
     parser.add_argument("--partial-train", dest="partial_train", type=float, help="Training fraction (0..1) or row count")
     parser.add_argument(
+        "--skip-graph-cache-validation",
+        dest="validate_graph_cache",
+        action="store_false",
+        default=None,
+        help=(
+            "Skip per-graph tensor checks for an existing verified cache; "
+            "recipe, ordered SMILES, and graph count are still checked"
+        ),
+    )
+    parser.add_argument(
+        "--skip-data-quality-report",
+        dest="data_quality_report",
+        action="store_false",
+        default=None,
+        help=(
+            "Skip the canonical-SMILES data-quality report for previously reviewed data; "
+            "required CSV schema and alignment checks remain enabled"
+        ),
+    )
+    parser.add_argument(
         "--quiet",
         dest="verbose",
         action="store_false",

@@ -8,7 +8,18 @@ import zipfile
 
 
 REQUIRED_PACKAGE_DATA = {
+    "D4CMPP2/_main.py",
+    "D4CMPP2/cli.py",
+    "D4CMPP2/exceptions.py",
+    "D4CMPP2/grid_search.py",
+    "D4CMPP2/optimize.py",
     "D4CMPP2/network_refer.yaml",
+    "D4CMPP2/src/api/__init__.py",
+    "D4CMPP2/src/api/command.py",
+    "D4CMPP2/src/api/errors.py",
+    "D4CMPP2/src/api/legacy_grid_search.py",
+    "D4CMPP2/src/api/optimization.py",
+    "D4CMPP2/src/api/training.py",
     "D4CMPP2/src/utils/functional_group.csv",
     "D4CMPP2/_Data/test.csv",
 }
@@ -73,6 +84,12 @@ def check_sdist(path: Path) -> None:
         "README.md",
         "pyproject.toml",
         "network_refer.yaml",
+        "src/api/__init__.py",
+        "src/api/command.py",
+        "src/api/errors.py",
+        "src/api/legacy_grid_search.py",
+        "src/api/optimization.py",
+        "src/api/training.py",
         "src/utils/functional_group.csv",
         "_Data/test.csv",
         "examples/README.md",
@@ -82,6 +99,11 @@ def check_sdist(path: Path) -> None:
         "examples/experiments/02_optimize.py",
         "examples/extensions/03_numeric_inputs.py",
         "examples/cli/README.md",
+        "examples/integration/README.md",
+        "examples/integration/common.py",
+        "examples/integration/run_all.py",
+        "examples/integration/solvent_analyzer.py",
+        "examples/integration/transfer_learning.py",
     }
     missing = required - relative
     if missing:

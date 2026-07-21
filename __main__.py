@@ -1,4 +1,4 @@
-from D4CMPP2.cli import main
+from D4CMPP2.src.api.command import main
 
 
 if __name__ == "__main__":

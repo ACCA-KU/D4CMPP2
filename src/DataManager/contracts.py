@@ -105,6 +105,16 @@ LEGACY_SOLVENT_BATCH_CONTRACT = DatasetBatchContract(
         "smiles",
         "solv_smiles",
     ),
+    optional_keys=(
+        "compound_graphs",
+        "compound_node_feature",
+        "compound_edge_feature",
+        "compound_smiles",
+        "solvent_graphs",
+        "solvent_node_feature",
+        "solvent_edge_feature",
+        "solvent_smiles",
+    ),
 )
 
 LEGACY_ISA_BATCH_CONTRACT = DatasetBatchContract(

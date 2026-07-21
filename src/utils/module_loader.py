@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any, Callable, Mapping, Union
 
-from D4CMPP2.exceptions import ManagerNotFoundError, ModuleLoadError
+from D4CMPP2.src.api.errors import ManagerNotFoundError, ModuleLoadError
 
 Config = Mapping[str, Any]
 ManagerFactory = Callable[[str, str], Any]

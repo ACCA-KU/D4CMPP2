@@ -8,3 +8,4 @@ recursive-include examples/inference *.py
 recursive-include examples/experiments *.py
 recursive-include examples/extensions *.py
 recursive-include examples/cli *.md
+recursive-include examples/integration *.py *.md

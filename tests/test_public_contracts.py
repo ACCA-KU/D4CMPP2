@@ -4,6 +4,8 @@ from pathlib import Path
 import re
 import unittest
 
+from markers import heavy_test
+
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_FIELDS = (
@@ -73,9 +75,9 @@ class PublicApiContractTests(unittest.TestCase):
         self.assertEqual(
             exports,
             {
-                "train": ("D4CMPP2._main", "train"),
-                "grid_search": ("D4CMPP2.grid_search", "grid_search"),
-                "optimize": ("D4CMPP2.optimize", "optimize"),
+                "train": ("D4CMPP2.src.api.training", "train"),
+                "grid_search": ("D4CMPP2.src.api.legacy_grid_search", "grid_search"),
+                "optimize": ("D4CMPP2.src.api.optimization", "optimize"),
                 "compare_experiments": ("D4CMPP2.src.utils.leaderboard", "compare_experiments"),
                 "Analyzer": ("D4CMPP2.src.Analyzer", "Analyzer"),
                 "Segmentator": ("D4CMPP2.src.utils.sculptor", "Segmentator"),
@@ -84,8 +86,8 @@ class PublicApiContractTests(unittest.TestCase):
         )
 
     def test_training_entry_point_signatures(self):
-        main_tree = parse_module("_main.py")
-        grid_tree = parse_module("grid_search.py")
+        main_tree = parse_module("src/api/training.py")
+        grid_tree = parse_module("src/api/legacy_grid_search.py")
         train = next(node for node in main_tree.body if isinstance(node, ast.FunctionDef) and node.name == "train")
         grid = next(node for node in grid_tree.body if isinstance(node, ast.FunctionDef) and node.name == "grid_search")
 
@@ -95,7 +97,7 @@ class PublicApiContractTests(unittest.TestCase):
         self.assertEqual(grid.args.kwarg.arg, "kwargs")
 
     def test_train_default_config(self):
-        actual = literal_assignment(parse_module("_main.py"), "config0")
+        actual = literal_assignment(parse_module("src/api/training.py"), "config0")
         expected = {
             "data": None,
             "target": None,
@@ -116,6 +118,8 @@ class PublicApiContractTests(unittest.TestCase):
             "random_seed": None,
             "deterministic_algorithms": False,
             "verbose": True,
+            "data_quality_report": True,
+            "validate_graph_cache": True,
             "hidden_dim": None,
             "conv_layers": None,
             "linear_layers": None,
@@ -125,6 +129,39 @@ class PublicApiContractTests(unittest.TestCase):
             "solv_linear_layers": None,
         }
         self.assertEqual(actual, expected)
+
+    def test_root_api_modules_are_thin_compatibility_aliases(self):
+        aliases = {
+            "_main.py": "D4CMPP2.src.api.training",
+            "cli.py": "D4CMPP2.src.api.command",
+            "optimize.py": "D4CMPP2.src.api.optimization",
+            "grid_search.py": "D4CMPP2.src.api.legacy_grid_search",
+            "exceptions.py": "D4CMPP2.src.api.errors",
+        }
+        for relative_path, target in aliases.items():
+            with self.subTest(relative_path=relative_path):
+                source = (ROOT / relative_path).read_text(encoding="utf-8")
+                self.assertLess(len(source.splitlines()), 10)
+                self.assertIn("sys.modules[__name__]", source)
+                self.assertIn(target, source)
+
+    @heavy_test
+    def test_compatibility_paths_resolve_to_canonical_module_objects(self):
+        import importlib
+
+        aliases = {
+            "D4CMPP2._main": "D4CMPP2.src.api.training",
+            "D4CMPP2.cli": "D4CMPP2.src.api.command",
+            "D4CMPP2.optimize": "D4CMPP2.src.api.optimization",
+            "D4CMPP2.grid_search": "D4CMPP2.src.api.legacy_grid_search",
+            "D4CMPP2.exceptions": "D4CMPP2.src.api.errors",
+        }
+        for compatibility_path, canonical_path in aliases.items():
+            with self.subTest(compatibility_path=compatibility_path):
+                self.assertIs(
+                    importlib.import_module(compatibility_path),
+                    importlib.import_module(canonical_path),
+                )
 
     def test_analyzers_use_current_trainer_prediction_contract(self):
         tree = parse_module("src/Analyzer/core.py")

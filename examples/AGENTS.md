@@ -27,3 +27,7 @@ fixture를 제공한다.
 - 2026-07-20: 학습, 모델 변형, 저장 모델 모드, inference, 불확실성, ISA 해석,
   실험 비교·최적화, callback, custom network 및 CLI를 기능별 Python 예제로
   분리하고 `examples/README.md`에 실행 비용과 산출물 경계를 기록했다.
+- 2026-07-21: `integration/`에 solvent 5종 train-save-Analyzer와
+  general/solvent/ISA transfer-save-Analyzer public workflow를 추가했다.
+  `run_all.py`는 각 workflow를 임시 cwd subprocess로 격리하고 선택적 artifact
+  보존, 실행 시간 요약과 실패 exit status를 제공한다.

@@ -53,3 +53,14 @@ ML dependency가 필요한 검증은
   Analyzer, packaging/CI 계약을 확립했다.
 - 2026-07-20: 개발 과정의 `docs/`를 제거하고 사용자 정보는 README로,
   유지보수 계약은 영역별 `AGENTS.md`로 재배치했다.
+- 2026-07-21: public transfer config는 `PATH.init_path`가 추가한 runtime-derived
+  path에도 merge 전 provenance를 부여해 saved source config overlay가
+  `DATA_PATH` 같은 key에서 실패하지 않게 한다.
+- 2026-07-21: data preparation은 CSV/cache 단계의 시작과 완료를 출력한다.
+  `validate_graph_cache=False`는 기존 v2 cache의 graph별 tensor 검사만 생략하며
+  recipe, ordered SMILES, graph count와 새 cache 저장 전 검증은 유지한다.
+  `data_quality_report=False`는 반복 canonical-SMILES audit만 생략하고 필수 CSV
+  schema/numeric/set/alignment 검사는 유지한다.
+- 2026-07-21: root의 큰 API 구현은 `src/api/`로 이동했다. `_main.py`, `cli.py`,
+  `optimize.py`, `grid_search.py`, `exceptions.py`는 기존 import와 monkeypatch를
+  보존하는 module-alias shim이며 새 로직을 추가하지 않는다.

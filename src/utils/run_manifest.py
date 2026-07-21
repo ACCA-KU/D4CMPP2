@@ -107,6 +107,7 @@ class RunManifest:
                 "schema_version": 2,
                 "cache_directory": config.get("GRAPH_DIR"),
                 "cache_policy": config.get("graph_cache_policy", "v2"),
+                "validate_graph_cache": config.get("validate_graph_cache", True),
             },
             "seeds": {
                 "split_random_seed": config.get("split_random_seed", 42),

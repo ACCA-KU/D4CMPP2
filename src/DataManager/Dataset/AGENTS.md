@@ -30,3 +30,6 @@ network `forward(**kwargs)` 형식으로 unwrap한다.
 
 - 2026-07-20: generalized multi-molecule/numeric PyG batch contract와 legacy
   key adapter를 확립했다.
+- 2026-07-21: solvent legacy unwrapper가 기존 key를 유지하면서 canonical
+  compound/solvent key도 같은 객체의 alias로 반환하도록 수정해 network input
+  validation과 forward 계약을 일치시켰다.

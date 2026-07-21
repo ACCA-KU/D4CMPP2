@@ -66,8 +66,13 @@ class PyGDataContractTests(unittest.TestCase):
 
     @heavy_test
     def test_solvent_dataset_uses_two_aligned_pyg_batches(self):
+        import importlib
+
+        import torch
+
         from D4CMPP2.src.DataManager.Dataset.GraphDataset import GraphDataset_withSolv
         from D4CMPP2.src.DataManager.GraphGenerator.MolGraphGenerator import MolGraphGenerator
+        from D4CMPP2.src.NetworkManager.NetworkManager import NetworkManager
 
         generator = MolGraphGenerator()
         compounds = [generator.get_graph("CCO"), generator.get_graph("CC")]
@@ -88,6 +93,46 @@ class PyGDataContractTests(unittest.TestCase):
         self.assertEqual(unwrapped["solv_graph"].ptr.tolist(), [0, 3, 5])
         self.assertEqual(unwrapped["smiles"], ["CCO", "CC"])
         self.assertEqual(unwrapped["solv_smiles"], ["O", "CO"])
+        self.assertIs(unwrapped["compound_graphs"], unwrapped["graph"])
+        self.assertIs(unwrapped["compound_node_feature"], unwrapped["node_feats"])
+        self.assertIs(unwrapped["compound_edge_feature"], unwrapped["edge_feats"])
+        self.assertIs(unwrapped["compound_smiles"], unwrapped["smiles"])
+        self.assertIs(unwrapped["solvent_graphs"], unwrapped["solv_graph"])
+        self.assertIs(unwrapped["solvent_node_feature"], unwrapped["solv_node_feats"])
+        self.assertIs(unwrapped["solvent_edge_feature"], unwrapped["solv_edge_feats"])
+        self.assertIs(unwrapped["solvent_smiles"], unwrapped["solv_smiles"])
+
+        config = {
+            "node_dim": generator.node_dim,
+            "edge_dim": generator.edge_dim,
+            "target_dim": 1,
+            "hidden_dim": 8,
+            "conv_layers": 1,
+            "linear_layers": 1,
+            "dropout": 0.0,
+        }
+        for module_name in (
+            "GCNwithSolv_model",
+            "MPNNwithSolv_model",
+            "DMPNNwithSolv_model",
+            "AFPwithSolv_model",
+            "GATwithSolv_model",
+        ):
+            with self.subTest(network=module_name):
+                model = importlib.import_module(
+                    f"D4CMPP2.networks.{module_name}"
+                ).network(config)
+                network_manager = NetworkManager.__new__(NetworkManager)
+                network_manager.network = model
+                network_manager.device = "cpu"
+                network_manager.unwrapper = GraphDataset_withSolv.unwrapper
+                network_manager.optimizer = torch.optim.Adam(model.parameters())
+                network_manager.loss_fn = model.loss_fn
+                network_manager.state = "eval"
+                target, output, loss = network_manager.step(batch)
+                self.assertEqual(tuple(target.shape), (2, 1))
+                self.assertEqual(tuple(output.shape), (2, 1))
+                self.assertTrue(torch.isfinite(torch.tensor(loss)).item())
 
     @heavy_test
     def test_empty_graph_has_explicit_feature_shapes(self):

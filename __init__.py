@@ -1,8 +1,8 @@
 __version__ = "0.4.0"
 
-from D4CMPP2._main import train as train
-from D4CMPP2.grid_search import grid_search as grid_search
-from D4CMPP2.optimize import optimize as optimize
+from D4CMPP2.src.api.training import train as train
+from D4CMPP2.src.api.legacy_grid_search import grid_search as grid_search
+from D4CMPP2.src.api.optimization import optimize as optimize
 from D4CMPP2.src.utils.leaderboard import compare_experiments as compare_experiments
 from D4CMPP2.src.Analyzer import Analyzer as Analyzer
 from D4CMPP2.src.utils.sculptor import Segmentator as Segmentator

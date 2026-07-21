@@ -1,5 +1,6 @@
 import sys
 import unittest
+import warnings
 
 from fixtures import ROOT
 from markers import heavy_test
@@ -10,6 +11,39 @@ class DatasetContractMatrixTests(unittest.TestCase):
     def setUpClass(cls):
         if str(ROOT.parent) not in sys.path:
             sys.path.insert(0, str(ROOT.parent))
+
+    @heavy_test
+    def test_tensor_targets_are_copied_without_pytorch_copy_warnings(self):
+        import torch
+
+        from D4CMPP2.src.DataManager.Dataset.GraphDataset import (
+            GraphDataset,
+            GraphDataset_legacy,
+        )
+        from D4CMPP2.src.DataManager.Dataset.ISAGraphDataset import ISAGraphDataset
+
+        target = torch.tensor([[1.0], [2.0]], requires_grad=True)
+        graph = type(
+            "MinimalGraph",
+            (),
+            {"x": torch.ones((1, 1)), "edge_attr": torch.ones((1, 1))},
+        )()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            legacy = GraphDataset_legacy([graph, graph], target, ["C", "CC"])
+            general = GraphDataset({}, target=target, smiles={})
+            isa = ISAGraphDataset({}, target=target, smiles={})
+
+        copy_warnings = [
+            warning
+            for warning in caught
+            if "copy construct from a tensor" in str(warning.message)
+        ]
+        self.assertEqual(copy_warnings, [])
+        for copied in (legacy.target, general.target, isa.target):
+            self.assertEqual(copied.dtype, torch.float32)
+            self.assertFalse(copied.requires_grad)
+            self.assertNotEqual(copied.data_ptr(), target.data_ptr())
 
     @heavy_test
     def test_generalized_dataset_preserves_multiple_molecules_numeric_and_subset_keys(self):
@@ -104,10 +138,20 @@ class DatasetContractMatrixTests(unittest.TestCase):
                 "target",
                 "smiles",
                 "solv_smiles",
+                "compound_graphs",
+                "compound_node_feature",
+                "compound_edge_feature",
+                "compound_smiles",
+                "solvent_graphs",
+                "solvent_node_feature",
+                "solvent_edge_feature",
+                "solvent_smiles",
             },
         )
         self.assertEqual(solvent_data["graph"].num_graphs, 2)
         self.assertEqual(solvent_data["solv_graph"].num_graphs, 2)
+        self.assertIs(solvent_data["compound_graphs"], solvent_data["graph"])
+        self.assertIs(solvent_data["solvent_graphs"], solvent_data["solv_graph"])
 
     @heavy_test
     def test_isa_generalized_dataset_preserves_numeric_subset_and_feature_contract(self):

@@ -28,3 +28,8 @@ Analyzer가 공유하는 실행 계층이다.
 
 - 2026-07-20: config provenance, typed errors, callbacks, atomic checkpoint와
   row-preserving Analyzer 흐름을 정립했다.
+- 2026-07-21: fitted target scaler는 prediction CSV 저장 여부와 분리해
+  PostProcessor가 항상 atomic `scaler.pkl`로 저장하며 Analyzer 필수 artifact
+  계약을 보장한다.
+- 2026-07-21: public training/optimization/CLI/error 구현은 `src/api/`가 canonical
+  위치이며 저장소 root 파일은 compatibility alias만 담당한다.

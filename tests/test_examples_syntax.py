@@ -24,6 +24,10 @@ class ExampleSyntaxTests(unittest.TestCase):
         "extensions/01_callbacks.py",
         "extensions/02_custom_network_training.py",
         "extensions/03_numeric_inputs.py",
+        "integration/solvent_analyzer.py",
+        "integration/transfer_learning.py",
+        "integration/run_all.py",
+        "integration/README.md",
         "cli/README.md",
     )
 

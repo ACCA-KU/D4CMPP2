@@ -149,10 +149,37 @@ class MolDataManager:
     # (main function) Initialize the data from the csv file based on the configuration
     def init_data(self):
         self.graph_errors = []
+        self._output().info(
+            f"[Data] Loading and validating CSV data from {self.config['DATA_PATH']!r}."
+        )
+        if self.config.get("data_quality_report", True):
+            self._output().info(
+                "[Data] Building the data-quality report (canonical SMILES, duplicates, "
+                "split overlap, and targets); large datasets may take time."
+            )
+        else:
+            self._output().info(
+                "[Data] Data-quality report skipped (data_quality_report=False); "
+                "required CSV schema, numeric, split, and alignment checks remain enabled."
+            )
         self.load_data()
+        self._output().info(
+            f"[Data] CSV validation complete: rows={len(self.df)}, "
+            f"molecule columns={self.molecule_columns!r}, targets={self.target!r}."
+        )
         self.prepare_graph()
         self.write_graph_error_report()
+        if self.config.get("data_quality_report", True):
+            self._output().info(
+                "[Data] Updating the data-quality report with graph-generation results."
+            )
         self.write_data_quality_report()
+        graph_counts = {
+            column: len(graphs) for column, graphs in self.molecule_graphs.items()
+        }
+        self._output().info(
+            f"[Data] Data preparation complete: graph counts={graph_counts}."
+        )
 
     def load_csv(self):
         path = os.path.join(self.config['DATA_PATH'])
@@ -271,7 +298,17 @@ class MolDataManager:
                 )
             if path.is_file():
                 try:
+                    validate_tensors = self.config.get("validate_graph_cache", True)
+                    validation = "enabled" if validate_tensors else "skipped"
+                    self._output().info(
+                        f"[Data] Loading graph cache for {col!r} from {str(path)!r}; "
+                        f"per-graph tensor validation={validation}."
+                    )
                     self.load_graphs(col)
+                    self._output().info(
+                        f"[Data] Graph cache ready for {col!r}: "
+                        f"graphs={len(self.molecule_graphs[col])}."
+                    )
                     continue
                 except (OSError, RuntimeError, ValueError, TypeError) as exc:
                     if policy != "regenerate":
@@ -303,6 +340,10 @@ class MolDataManager:
                     RuntimeWarning,
                     stacklevel=2,
                 )
+            self._output().info(
+                f"[Data] No reusable v2 graph cache for {col!r}; generating graphs "
+                f"and saving {str(path)!r}."
+            )
             self.generate_graph(col)
             self.save_graphs(col)
 
@@ -405,6 +446,7 @@ class MolDataManager:
             recipe,
             self._molecule_smiles[col],
             path,
+            validate_graph_tensors=self.config.get("validate_graph_cache", True),
         )
         self.molecule_graphs[col] = graphs
         self.graph_errors.extend(cached_errors)
@@ -710,7 +752,8 @@ class MolDataManager_withSolv(MolDataManager):
     """The class for the management of the molecular data with the solvent, preparing the dataset, and dataloader"""
     def __init__(self, config):
         super().__init__(config)
-        self.molecule_columns.append('solvent')
+        if 'solvent' not in self.molecule_columns:
+            self.molecule_columns.append('solvent')
         self.molecule_graphs={col:[] for col in self.molecule_columns}
 
     def import_others(self):
@@ -720,8 +763,8 @@ class MolDataManager_withSolv(MolDataManager):
         self.dataset =GraphDataset_withSolv
         self.unwrapper = self.dataset.unwrapper
         
-    def init_temp_data(self,smiles,solvents,**kwargs):
-        return super().init_temp_data(smiles, solvents, **kwargs)
+    def init_temp_data(self, *args, **kwargs):
+        return super().init_temp_data(*args, **kwargs)
 
     def init_dataset(self):
         return self.dataset(self.molecule_graphs['compound'], self.molecule_graphs['solvent'], self.target_value, self._molecule_smiles['compound'], self._molecule_smiles['solvent'])

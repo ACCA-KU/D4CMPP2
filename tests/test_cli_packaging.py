@@ -23,6 +23,14 @@ class CliArgumentTests(unittest.TestCase):
         args = argparser.parse_args(["--quiet"])
         self.assertFalse(args.verbose)
 
+    def test_graph_cache_validation_can_be_skipped_explicitly(self):
+        args = argparser.parse_args([
+            "--skip-graph-cache-validation",
+            "--skip-data-quality-report",
+        ])
+        self.assertFalse(args.validate_graph_cache)
+        self.assertFalse(args.data_quality_report)
+
     def test_cuda_zero_target_and_fragment_are_preserved(self):
         args = argparser.parse_args([
             "--data", "tiny.csv", "--target", "a, b", "--network", "GCN",
@@ -45,6 +53,8 @@ class CliArgumentTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 0)
         help_text = stream.getvalue()
         self.assertIn("--device", help_text)
+        self.assertIn("--skip-graph-cache-validation", help_text)
+        self.assertIn("--skip-data-quality-report", help_text)
         self.assertIn("cpu", help_text)
         self.assertIn("ISATPN", help_text)
 

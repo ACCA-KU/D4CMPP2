@@ -35,3 +35,13 @@ CSV schema, graph 생성/cache, row alignment, split, scaler, Dataset/DataLoader
 
 - 2026-07-20: row alignment, data-quality report, train-only scaler,
   scaffold split, PyG cache v2를 확립했다.
+- 2026-07-21: solvent manager는 public config/example에 이미 `solvent` molecule
+  column이 있으면 다시 append하지 않아 CSV schema 중복 오류를 방지한다.
+- 2026-07-21: solvent inference는 과거 두 positional input과 generalized
+  `compound=`/`solvent=` keyword를 모두 base `init_temp_data` 계약으로 전달해
+  Analyzer v2 named-input 호출을 지원한다.
+- 2026-07-21: CSV와 graph-cache 준비 경계는 verbose 상태를 출력한다. 반복 학습의
+  `validate_graph_cache=False`는 cache metadata/SMILES/count를 확인한 뒤 graph별
+  tensor 순회만 건너뛴다.
+- 2026-07-21: `data_quality_report=False`는 고비용 canonical molecule audit과
+  report 쓰기를 끄지만 CSV 필수 검사는 끄지 않는다.

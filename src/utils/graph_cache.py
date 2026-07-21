@@ -180,7 +180,14 @@ def validate_graph(graph, recipe, index):
     _validate_edge_alignment(graph.edge_index, graph.edge_attr, prefix)
 
 
-def validate_payload(payload, expected_recipe, expected_smiles, path):
+def validate_payload(
+    payload,
+    expected_recipe,
+    expected_smiles,
+    path,
+    *,
+    validate_graph_tensors=True,
+):
     if not isinstance(payload, dict):
         raise ValueError(f"Graph cache {str(path)!r} must contain a dictionary payload.")
     actual_recipe = payload.get("recipe")
@@ -208,6 +215,7 @@ def validate_payload(payload, expected_recipe, expected_smiles, path):
             f"{len(graphs) if isinstance(graphs, list) else type(graphs).__name__}, "
             f"expected {len(expected_smiles)}. Regenerate this cache."
         )
-    for index, graph in enumerate(graphs):
-        validate_graph(graph, expected_recipe, index)
+    if validate_graph_tensors:
+        for index, graph in enumerate(graphs):
+            validate_graph(graph, expected_recipe, index)
     return graphs, list(payload.get("graph_errors") or [])

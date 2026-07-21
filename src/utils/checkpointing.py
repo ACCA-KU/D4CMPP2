@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from D4CMPP2.exceptions import (
+from D4CMPP2.src.api.errors import (
     CheckpointFormatError,
     CheckpointIOError,
     CheckpointLoadError,
