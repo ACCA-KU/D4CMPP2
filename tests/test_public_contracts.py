@@ -176,7 +176,7 @@ class SavedAssetContractTests(unittest.TestCase):
         "examples/general/assets/models/GCN_model_Aqsoldb_Solubility_20240101_000000": {
             "config.yaml", "final.pth", "learning_curve.csv", "learning_curve.png",
             "metrics.csv", "model_summary.txt", "network.py", "prediction.csv",
-            "prediction.png", "scaler.pkl", "data",
+            "prediction.png", "scaler.pkl",
         },
         "examples/ISA/assets/Models/ISAT_model_Aqsoldb_Solubility_620_20240101_000000": {
             "config.yaml", "final.pth", "functional_group.csv",
@@ -196,7 +196,7 @@ class SavedAssetContractTests(unittest.TestCase):
                 actual = {
                     entry.name
                     for entry in (ROOT / relative_path).iterdir()
-                    if entry.name != ".ipynb_checkpoints"
+                    if entry.name not in {".ipynb_checkpoints", "data"}
                 }
                 self.assertEqual(actual, expected)
 

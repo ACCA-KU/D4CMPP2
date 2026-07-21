@@ -34,4 +34,5 @@ public API, saved asset, graph/network 수치, training, Analyzer, CI/artifact
 - 2026-07-20: fast/heavy 2계층, 13-model smoke, legacy model loading,
   clean artifact quickstart를 포함하는 199-test suite로 정리했다.
 - 2026-07-21: saved example asset 구성 검사는 Git에 포함되지 않는 Jupyter의
-  `.ipynb_checkpoints` 임시 디렉터리를 계약에서 제외한다.
+  `.ipynb_checkpoints`와 Analyzer가 생성하는 `data` 임시 디렉터리를 계약에서
+  제외한다. leaderboard의 nullable 문자열은 pandas의 `NaN` 정규화를 허용한다.

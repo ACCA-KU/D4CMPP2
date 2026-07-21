@@ -68,7 +68,7 @@ class ExperimentLeaderboardTests(unittest.TestCase):
             self.assertEqual(legacy["rank"], 2)
             self.assertTrue(pd.isna(old["val_rmse"]))
             self.assertTrue(pd.isna(failed["val_rmse"]))
-            self.assertIsNone(old["metric_source"])
+            self.assertTrue(pd.isna(old["metric_source"]))
 
     @heavy_test
     def test_target_grouping_r2_direction_and_actionable_errors(self):

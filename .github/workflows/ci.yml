@@ -54,6 +54,8 @@ jobs:
           - profile: minimum
             python: "3.10"
             install: |
+              # PyTorch 2.2 wheels use the NumPy 1.x ABI.
+              python -m pip install "numpy<2"
               python -m pip install torch==2.2.0 torch-geometric==2.8.0
               python -m pip install .
           - profile: latest

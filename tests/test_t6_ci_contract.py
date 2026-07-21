@@ -37,6 +37,7 @@ class CIContractTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("torch==2.2.0 torch-geometric==2.8.0", workflow)
+        self.assertIn('python -m pip install "numpy<2"', workflow)
         self.assertIn("profile: latest", workflow)
         self.assertIn('python: "3.12"', workflow)
         self.assertIn("D4CMPP2_RUN_HEAVY: \"1\"", workflow)
