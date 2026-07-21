@@ -77,7 +77,12 @@ def build_data_quality_report(frame, config, graph_errors=None):
     if len(canonical_columns) == len(molecule_columns):
         signature_frame = pd.DataFrame(canonical_columns)
         valid_signature = signature_frame.notna().all(axis=1)
-        signature = signature_frame.astype(str).agg("||".join, axis=1).where(valid_signature)
+        # pandas 3 may preserve missing values as float NaN after astype(str),
+        # so convert every scalar explicitly before joining the row signature.
+        signature = signature_frame.agg(
+            lambda values: "||".join(str(value) for value in values),
+            axis=1,
+        ).where(valid_signature)
         duplicate_mask = signature.notna() & signature.duplicated(keep=False)
         for row_index in frame.index[duplicate_mask]:
             issues.append({

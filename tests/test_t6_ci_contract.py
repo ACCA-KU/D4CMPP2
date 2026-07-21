@@ -20,6 +20,8 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("name: pypi", release)
         self.assertIn("id-token: write", release)
         self.assertIn("pypa/gh-action-pypi-publish@release/v1", release)
+        self.assertIn("actions/checkout@v5", release)
+        self.assertIn("actions/setup-python@v6", release)
         self.assertIn('tag_version="${GITHUB_REF_NAME#v}"', release)
         self.assertIn('python-version: "3.11"', release)
         self.assertIn("import tomllib", release)
@@ -28,10 +30,14 @@ class CIContractTests(unittest.TestCase):
 
     def test_ci_covers_declared_python_and_primary_operating_system_matrix(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
+        fast_unit = workflow.split("  fast-unit:", 1)[1].split("  pyg-cpu:", 1)[0]
 
         self.assertIn('python: ["3.10", "3.11", "3.12"]', workflow)
         self.assertIn("os: [ubuntu-latest, windows-latest]", workflow)
         self.assertIn("python -m unittest discover -s tests -v", workflow)
+        self.assertIn("actions/checkout@v5", workflow)
+        self.assertIn("actions/setup-python@v6", workflow)
+        self.assertNotIn("cache: pip", fast_unit)
 
     def test_ci_has_full_pyg_cpu_and_clean_artifact_jobs(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")

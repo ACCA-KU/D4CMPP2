@@ -36,3 +36,7 @@ public API, saved asset, graph/network 수치, training, Analyzer, CI/artifact
 - 2026-07-21: saved example asset 구성 검사는 Git에 포함되지 않는 Jupyter의
   `.ipynb_checkpoints`와 Analyzer가 생성하는 `data` 임시 디렉터리를 계약에서
   제외한다. leaderboard의 nullable 문자열은 pandas의 `NaN` 정규화를 허용한다.
+- 2026-07-21: dependency를 설치하지 않는 fast matrix는 빈 pip cache 저장을
+  시도하지 않도록 setup-python cache를 사용하지 않는다.
+- 2026-07-21: custom-network example은 wheel package import 경로로 가정하지 않고
+  repository example source를 직접 로드해 sdist-only 예제 배포 계약을 유지한다.

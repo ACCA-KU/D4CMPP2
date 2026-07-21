@@ -1,6 +1,6 @@
 import unittest
 
-from fixtures import ROOT
+from fixtures import ROOT, load_source_module
 from markers import heavy_test
 
 
@@ -11,8 +11,12 @@ class CustomNetworkTests(unittest.TestCase):
         from torch_geometric.data import Batch, Data
 
         import D4CMPP2
-        from D4CMPP2.examples.custom_network import CustomGCN
         from D4CMPP2.networks.registry import get_model
+
+        CustomGCN = load_source_module(
+            "examples/custom_network.py",
+            "d4cmpp2_example_custom_network",
+        ).CustomGCN
 
         D4CMPP2.register_network(
             CustomGCN,
@@ -59,8 +63,12 @@ class CustomNetworkTests(unittest.TestCase):
     def test_registered_custom_network_supplies_training_manager_contract(self):
         import D4CMPP2
         from D4CMPP2._main import load_NET_REFER
-        from D4CMPP2.examples.custom_network import CustomGCN
         from D4CMPP2.networks.registry import get_model
+
+        CustomGCN = load_source_module(
+            "examples/custom_network.py",
+            "d4cmpp2_example_custom_network_contract",
+        ).CustomGCN
 
         try:
             get_model("custom_gcn")
