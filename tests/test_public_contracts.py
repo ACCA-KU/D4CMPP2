@@ -179,12 +179,12 @@ class SavedAssetContractTests(unittest.TestCase):
             "prediction.png", "scaler.pkl", "data",
         },
         "examples/ISA/assets/Models/ISAT_model_Aqsoldb_Solubility_620_20240101_000000": {
-            ".ipynb_checkpoints", "config.yaml", "final.pth", "functional_group.csv",
+            "config.yaml", "final.pth", "functional_group.csv",
             "learning_curve.csv", "learning_curve.png", "metrics.csv", "model_summary.txt",
             "network.py", "prediction.csv", "prediction.png", "scaler.pkl",
         },
         "examples/ISA/assets/Models/ISATPM_model_Aqsoldb_Solubility_620_20240101_000000": {
-            ".ipynb_checkpoints", "config.yaml", "final.pth", "functional_group.csv",
+            "config.yaml", "final.pth", "functional_group.csv",
             "learning_curve.csv", "learning_curve.png", "metrics.csv", "model_summary.txt",
             "network.py", "prediction.csv", "prediction.png", "scaler.pkl",
         },
@@ -193,7 +193,11 @@ class SavedAssetContractTests(unittest.TestCase):
     def test_example_model_composition(self):
         for relative_path, expected in self.EXAMPLES.items():
             with self.subTest(model=relative_path):
-                actual = {entry.name for entry in (ROOT / relative_path).iterdir()}
+                actual = {
+                    entry.name
+                    for entry in (ROOT / relative_path).iterdir()
+                    if entry.name != ".ipynb_checkpoints"
+                }
                 self.assertEqual(actual, expected)
 
     def test_example_config_schema(self):
