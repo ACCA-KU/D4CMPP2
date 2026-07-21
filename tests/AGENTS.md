@@ -40,3 +40,5 @@ public API, saved asset, graph/network 수치, training, Analyzer, CI/artifact
   시도하지 않도록 setup-python cache를 사용하지 않는다.
 - 2026-07-21: custom-network example은 wheel package import 경로로 가정하지 않고
   repository example source를 직접 로드해 sdist-only 예제 배포 계약을 유지한다.
+- 2026-07-21: wheel smoke의 child venv는 parent에 같은 버전이 설치되어 있어도
+  검증 대상 wheel을 강제 재설치해 console script 생성까지 검사한다.

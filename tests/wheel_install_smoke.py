@@ -45,7 +45,14 @@ def main():
         # Reuse the wrapper's already verified ML binaries while isolating the D4CMPP2 artifact.
         run(sys.executable, "-m", "venv", "--system-site-packages", str(venv))
         python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        run(str(python), "-m", "pip", "install", "--no-deps", str(wheel))
+        # The CI parent environment already has D4CMPP2 installed so runtime
+        # dependencies are available through --system-site-packages. Force pip
+        # to install this wheel into the child venv instead of treating the
+        # parent copy with the same version as already satisfied.
+        run(
+            str(python), "-m", "pip", "install",
+            "--no-deps", "--force-reinstall", str(wheel),
+        )
         probe = temporary / "probe"
         probe.mkdir()
         code = (

@@ -71,6 +71,9 @@ class CIContractTests(unittest.TestCase):
         artifact_script = (ROOT / "tests" / "ci_artifact_checks.sh").read_text(
             encoding="utf-8"
         )
+        wheel_smoke = (ROOT / "tests" / "wheel_install_smoke.py").read_text(
+            encoding="utf-8"
+        )
         for path in (
             ROOT / "LICENSE",
             ROOT / "MANIFEST.in",
@@ -91,6 +94,7 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("python -m build", artifact_script)
         self.assertIn("check_distribution_artifacts.py", artifact_script)
         self.assertIn("wheel_install_smoke.py", artifact_script)
+        self.assertIn('"--no-deps", "--force-reinstall", str(wheel)', wheel_smoke)
 
     def test_dependency_metadata_uses_approved_major_version_bounds(self):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
