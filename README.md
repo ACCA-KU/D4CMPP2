@@ -45,9 +45,6 @@ python -m pip install "D4CMPP2[notebook]"
 DGL is not installed or loaded. DGL graph caches cannot be renamed or reused
 as PyG caches.
 
-Ready-to-build CPU, CUDA 12.8, and CUDA 13.0 container definitions are
-documented in [`docker/README.md`](docker/README.md).
-
 ## Supported models
 
 | Family | Network IDs |

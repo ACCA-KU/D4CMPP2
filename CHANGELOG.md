@@ -22,8 +22,6 @@ does not automatically invalidate existing model assets.
   dtype, detachment, or copy semantics.
 - Moved the main training, optimization, CLI, and exception implementations into
   `D4CMPP2.src.api`, retaining thin aliases for historical public module paths.
-- Added multi-stage Docker definitions for pinned CPU, CUDA 12.8, and CUDA 13.0
-  PyTorch runtimes, including non-root execution and Docker Hub commands.
 - Isolated optimization invocations in unique timestamped default directories;
   explicit `optimization_path` values retain resumable-search behavior.
 
