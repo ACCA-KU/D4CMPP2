@@ -4,6 +4,10 @@ This project follows semantic versioning for the Python package. Saved-model
 and config compatibility is documented separately because a package release
 does not automatically invalidate existing model assets.
 
+## 1.0.1
+
+- Fix the bug in HP optimization, providing consistent directory path for independent runs.
+
 ## 1.0.0
 
 - Stabilized all solvent-aware model pipelines from training and persistence to

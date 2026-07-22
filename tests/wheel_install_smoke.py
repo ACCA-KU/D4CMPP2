@@ -25,7 +25,7 @@ def main():
         editable_probe.mkdir()
         run(
             str(editable_python), "-I", "-c",
-            "import D4CMPP2; assert D4CMPP2.__version__ == '1.0.0'; print(D4CMPP2.__file__)",
+            "import D4CMPP2; assert D4CMPP2.__version__ == '1.0.1'; print(D4CMPP2.__file__)",
             cwd=editable_probe,
         )
         dist = temporary / "dist"
@@ -57,7 +57,7 @@ def main():
         probe.mkdir()
         code = (
             "import importlib.resources as r, D4CMPP2; "
-            "assert D4CMPP2.__version__ == '1.0.0'; "
+            "assert D4CMPP2.__version__ == '1.0.1'; "
             "root=r.files('D4CMPP2'); "
             "assert root.joinpath('network_refer.yaml').is_file(); "
             "assert root.joinpath('src/utils/functional_group.csv').is_file(); "
