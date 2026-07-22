@@ -94,6 +94,39 @@ class OptimizeTests(unittest.TestCase):
                     )
 
     @heavy_test
+    def test_default_path_is_unique_per_optimization_invocation(self):
+        optimize_module = importlib.import_module("D4CMPP2.optimize")
+        with tempfile.TemporaryDirectory(prefix="d4cmpp2-optimize-default-") as temp:
+            with mock.patch.object(
+                optimize_module, "train", side_effect=self._fake_train
+            ) as train_mock:
+                first = optimize_module.optimize(
+                    data="fixture.csv",
+                    target=["target"],
+                    network="GCN",
+                    HP={"hidden_dim": [16]},
+                    optimize_strategy="grid",
+                    MODEL_DIR=temp,
+                )
+                second = optimize_module.optimize(
+                    data="fixture.csv",
+                    target=["target"],
+                    network="GCN",
+                    HP={"hidden_dim": [16]},
+                    optimize_strategy="grid",
+                    MODEL_DIR=temp,
+                )
+
+        first_root = Path(first.summary_path).parent
+        second_root = Path(second.summary_path).parent
+        self.assertEqual(train_mock.call_count, 2)
+        self.assertNotEqual(first_root, second_root)
+        self.assertEqual(first_root.parent, Path(temp).resolve())
+        self.assertEqual(second_root.parent, Path(temp).resolve())
+        self.assertTrue(first_root.name.startswith("optimize_GCN_"))
+        self.assertTrue(second_root.name.startswith("optimize_GCN_"))
+
+    @heavy_test
     def test_bayesian_runs_requested_trials_and_is_reproducible(self):
         optimize_module = importlib.import_module("D4CMPP2.optimize")
         with (

@@ -22,3 +22,5 @@ legacy grid search, CLI dispatch, and public exception categories.
 ## Change history
 
 - 2026-07-21: Moved root API implementations here while retaining root module aliases.
+- 2026-07-21: Optimization calls without an explicit `optimization_path` create
+  unique timestamped run directories. Resuming requires reusing an explicit path.

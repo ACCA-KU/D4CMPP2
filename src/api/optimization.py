@@ -268,6 +268,21 @@ def _write_summary(path, summary):
             staging.unlink()
 
 
+def _create_default_optimization_root(model_dir, network):
+    """Create and return a unique directory for one optimization invocation."""
+    parent = Path(model_dir or "_Models").resolve()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    stem = f"optimize_{network}_{timestamp}"
+    for suffix in itertools.count():
+        name = stem if suffix == 0 else f"{stem}_{suffix + 1}"
+        candidate = parent / name
+        try:
+            candidate.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return candidate
+
+
 def _random_parameters(domains, rng):
     return {domain.name: domain.sample(rng) for domain in domains}
 
@@ -327,7 +342,12 @@ def optimize(
     resume=True,
     **train_kwargs,
 ):
-    """Tune one registered network and return its best completed trial."""
+    """Tune one registered network and return its best completed trial.
+
+    Calls without ``optimization_path`` create independent timestamped run
+    directories. Pass the same explicit path with ``resume=True`` to resume a
+    compatible search.
+    """
     if not isinstance(optimize_strategy, str):
         raise TypeError("optimize_strategy must be 'grid' or 'bayesian'.")
     strategy = optimize_strategy.lower()
@@ -342,12 +362,13 @@ def optimize(
     elif n_trials is not None:
         raise ValueError("n_trials is only used with optimize_strategy='bayesian'.")
 
-    root = Path(
-        optimization_path
-        or Path(train_kwargs.get("MODEL_DIR", "_Models"))
-        / f"optimize_{network}"
-    ).resolve()
-    root.mkdir(parents=True, exist_ok=True)
+    if optimization_path:
+        root = Path(optimization_path).resolve()
+        root.mkdir(parents=True, exist_ok=True)
+    else:
+        root = _create_default_optimization_root(
+            train_kwargs.get("MODEL_DIR"), network
+        )
     summary_path = root / "optimization.json"
     if resume and summary_path.exists():
         summary = json.loads(summary_path.read_text(encoding="utf-8"))

@@ -45,6 +45,9 @@ python -m pip install "D4CMPP2[notebook]"
 DGL is not installed or loaded. DGL graph caches cannot be renamed or reused
 as PyG caches.
 
+Ready-to-build CPU, CUDA 12.8, and CUDA 13.0 container definitions are
+documented in [`docker/README.md`](docker/README.md).
+
 ## Supported models
 
 | Family | Network IDs |
@@ -346,7 +349,10 @@ print(result.best_params, result.best_model_path)
 `HP=None` uses the model's default optimization space. A key list uses declared
 model ranges; a dictionary supplies categorical values or numeric ranges.
 Supported strategies are `"bayesian"` and `"grid"`. Atomic JSON/CSV summaries
-and trial directories allow compatible searches to resume.
+and trial directories allow compatible searches to resume. When
+`optimization_path` is omitted, each call creates a separate timestamped
+`_Models/optimize_{network}_...` directory. To resume a search, pass its
+existing directory as `optimization_path` with `resume=True`.
 
 The legacy `grid_search()` API remains available with its historical `None`
 return value and continue-on-trial-error behavior.
