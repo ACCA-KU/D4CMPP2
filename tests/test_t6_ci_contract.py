@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -7,6 +8,19 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 class CIContractTests(unittest.TestCase):
+    def test_runtime_version_matches_distribution_metadata(self):
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        package_init = (ROOT / "__init__.py").read_text(encoding="utf-8")
+        metadata_version = re.search(
+            r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE
+        )
+        runtime_version = re.search(
+            r'^__version__\s*=\s*"([^"]+)"', package_init, re.MULTILINE
+        )
+        self.assertIsNotNone(metadata_version)
+        self.assertIsNotNone(runtime_version)
+        self.assertEqual(metadata_version.group(1), runtime_version.group(1))
+
     def test_release_workflow_uses_verified_artifact_and_job_scoped_oidc(self):
         release = (ROOT / ".github" / "workflows" / "release.yml").read_text(
             encoding="utf-8"
@@ -95,6 +109,7 @@ class CIContractTests(unittest.TestCase):
         self.assertIn("check_distribution_artifacts.py", artifact_script)
         self.assertIn("wheel_install_smoke.py", artifact_script)
         self.assertIn('"--no-deps", "--force-reinstall", str(wheel)', wheel_smoke)
+        self.assertIn("m.version('D4CMPP2')", wheel_smoke)
 
     def test_dependency_metadata_uses_approved_major_version_bounds(self):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")

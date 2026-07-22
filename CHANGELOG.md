@@ -6,6 +6,8 @@ does not automatically invalidate existing model assets.
 
 ## 1.0.1
 
+- Synchronized the runtime `D4CMPP2.__version__` with package metadata and made
+  wheel smoke tests compare against installed distribution metadata.
 - Fix the bug in HP optimization, providing consistent directory path for independent runs.
 
 ## 1.0.0
